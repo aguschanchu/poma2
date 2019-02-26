@@ -1,6 +1,7 @@
 from django.db import models
-
+from django.core.validators import MaxValueValidator, MinValueValidator
 # Color Model
+
 
 class Color(models.Model):
     name = models.CharField(max_length=100)
@@ -10,6 +11,7 @@ class Color(models.Model):
         return self.name
 
 # Material Model
+
 
 class Material(models.Model):
     name = models.CharField(max_length=200)
@@ -22,6 +24,7 @@ class Material(models.Model):
 
 # Filament Provider Model
 
+
 class FilamentProvider(models.Model):
     name = models.CharField(max_length=200)
     sku = models.CharField(max_length=200)
@@ -32,6 +35,7 @@ class FilamentProvider(models.Model):
 
 # Material Brand Model
 
+
 class MaterialBrand(models.Model):
     name = models.CharField(max_length=200)
     slug = models.CharField(max_length=200)
@@ -41,6 +45,7 @@ class MaterialBrand(models.Model):
         return self.name
 
 # Filament Model
+
 
 class Filament(models.Model):
     name = models.CharField(max_length=200, blank=True)
@@ -59,11 +64,13 @@ class Filament(models.Model):
 
 # Ready to print GCODE Model
 
+
 class Gcode(models.Model):
     print_file = models.FileField()
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
 
 # Order Models
+
 
 class Order(models.Model):
     client = models.CharField(max_length=200)
@@ -74,20 +81,36 @@ class Order(models.Model):
 
 # Piece Model
 
+
 class Piece(models.Model):
+
+    QUALITIES = (('auto', 'Automatica'),
+                 ('0', 'Muy Alta: 0.05mm'),
+                 ('1', 'Alta: 0.1mm'),
+                 ('2', 'Media: 0.15mm'),
+                 ('3', 'Baja: 0.2mm'))
+
+    # TODO Define all possible states for a piece
+
     # Hacer otra clase Object que contenga muchas piezas y lleve cuenta de la cantidad impresa, referencia a la orden, etc?
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='pieces')
-    scale = models.FloatField()
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, related_name='pieces')
+    scale = models.FloatField(default=1.0)
+    quality = models.CharField(default='2', max_length=4, choices=QUALITIES)
+    priority = models.IntegerField(
+        default=3, validators=[MaxValueValidator(5), MinValueValidator(0)])
     copies = models.IntegerField(default=1)
     completed = models.IntegerField(default=0)
     stl = models.FileField(blank=True, null=True)
-    gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
+    gcode = models.ForeignKey(
+        Gcode, on_delete=models.CASCADE, blank=True, null=True)
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
     status = models.CharField(max_length=200)
-    cost = models.FloatField(null=True, blank=True)
-    price = models.FloatField(null=True, blank=True)
+    weight = models.FloatField(null=True, blank=True)
+    time = models.DurationField(null=True, blank=True)
 
 # Printer Model
+
 
 class Printer(models.Model):
     name = models.CharField(max_length=200)
