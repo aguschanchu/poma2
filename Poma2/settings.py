@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'skynet.apps.SkynetConfig',
-    'wc_liaison.apps.WcLiaisonConfig'
+    'wc_liaison.apps.WcLiaisonConfig',
+    'rest_framework'
 ]
 
 MIDDLEWARE = [

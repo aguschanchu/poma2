@@ -1,6 +1,14 @@
 from django.db import models
 from skynet.models import Gcode, Color, Material
 
+# WooCommerce API Key Model
+
+class WC_APIKey(models.Model):
+    url = models.CharField(max_length=200)
+    consumer_key = models.CharField(max_length=200)
+    consumer_secret = models.CharField(max_length=200)
+
+
 # Attribute Model
 
 class Attribute(models.Model):
@@ -31,6 +39,9 @@ class AttributeTerm(models.Model):
     value = models.CharField(max_length=200)
     color_implications = models.ManyToManyField(Color, blank=True)
     material_implications = models.ManyToManyField(Material, blank=True)
+
+    def __str__(self):
+        return self.value
 
 # Product Model
 
@@ -64,7 +75,7 @@ class Component(models.Model):
     gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
     variation = models.ForeignKey(Variation, on_delete=models.CASCADE, related_name='components')
 
-# WooCommerce Order Model
+# WooCommerce Order Model (necessary?)
 
 class WC_Order(models.Model):
     variation_id = models.CharField(max_length=200)
