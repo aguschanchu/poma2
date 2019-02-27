@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
-# Color Model
 
+# Color Model
 
 class Color(models.Model):
     name = models.CharField(max_length=100)
@@ -10,8 +10,8 @@ class Color(models.Model):
     def __str__(self):
         return self.name
 
-# Material Model
 
+# Material Model
 
 class Material(models.Model):
     name = models.CharField(max_length=200)
@@ -22,8 +22,8 @@ class Material(models.Model):
     def __str__(self):
         return self.name
 
-# Filament Provider Model
 
+# Filament Provider Model
 
 class FilamentProvider(models.Model):
     name = models.CharField(max_length=200)
@@ -33,8 +33,8 @@ class FilamentProvider(models.Model):
     def __str__(self):
         return self.name
 
-# Material Brand Model
 
+# Material Brand Model
 
 class MaterialBrand(models.Model):
     name = models.CharField(max_length=200)
@@ -44,8 +44,8 @@ class MaterialBrand(models.Model):
     def __str__(self):
         return self.name
 
-# Filament Model
 
+# Filament Model
 
 class Filament(models.Model):
     name = models.CharField(max_length=200, blank=True)
@@ -62,15 +62,15 @@ class Filament(models.Model):
     def __str__(self):
         return self.name
 
-# Ready to print GCODE Model
 
+# Ready to print GCODE Model
 
 class Gcode(models.Model):
     print_file = models.FileField()
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
 
-# Order Models
 
+# Order Models
 
 class Order(models.Model):
     client = models.CharField(max_length=200)
@@ -79,8 +79,8 @@ class Order(models.Model):
     priority = models.IntegerField()
     status = models.CharField(max_length=200)
 
-# Piece Model
 
+# Piece Model
 
 class Piece(models.Model):
 
@@ -109,8 +109,8 @@ class Piece(models.Model):
     weight = models.FloatField(null=True, blank=True)
     time = models.DurationField(null=True, blank=True)
 
-# Printer Model
 
+# Printer Model
 
 class Printer(models.Model):
     name = models.CharField(max_length=200)
