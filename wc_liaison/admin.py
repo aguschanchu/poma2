@@ -1,5 +1,5 @@
 from django.contrib import admin
-from wc_liaison.models import Attribute, AttributeTerm, Product, Variation, Component, WC_APIKey
+from wc_liaison.models import Attribute, AttributeTerm, Product, Variation, Component, WcApiKey
 
 # Register your models here.
 
@@ -52,7 +52,7 @@ class ComponentAdmin(admin.ModelAdmin):
     def parent_variation(self, obj):
         return obj.variation.name
 
-admin.site.register(WC_APIKey, WC_APIKeyAdmin)
+admin.site.register(WcApiKey, WC_APIKeyAdmin)
 admin.site.register(Attribute, AttributeAdmin)
 admin.site.register(AttributeTerm, AttributeTermAdmin)
 admin.site.register(Product, ProductAdmin)

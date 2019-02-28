@@ -3,7 +3,7 @@ from skynet.models import Gcode, Color, Material
 
 # WooCommerce API Key Model
 
-class WC_APIKey(models.Model):
+class WcApiKey(models.Model):
     url = models.CharField(max_length=200)
     consumer_key = models.CharField(max_length=200)
     consumer_secret = models.CharField(max_length=200)

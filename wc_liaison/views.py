@@ -5,10 +5,11 @@ from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from skynet.models import Color
-from wc_liaison.models import WC_APIKey, Attribute, AttributeTerm, Product
+from wc_liaison.models import WcApiKey, Attribute, AttributeTerm, Product
 from urllib.parse import urlencode
 from woocommerce import API
 from wc_liaison.serializers import ProductSerializer
+from django.conf import settings
 
 # on API Key requested to Woocommerce
 
@@ -27,9 +28,10 @@ class WoocommerceAttributes(APIView):
 
     def get(self, request, format=None):
         try:
-            # Get API Key and create a WooCommerce API instance
-            api_key = WC_APIKey.objects.all()[0]
-            wcapi = API(url=api_key.url, consumer_key=api_key.consumer_key, consumer_secret=api_key.consumer_secret, wc_api=True, version="wc/v2")
+            # Create a WooCommerce API instance
+            wcapi = API(url=settings.WOOCOMMERCE_URL, consumer_key=settings.CONSUMER_KEY,
+                        consumer_secret=settings.CONSUMER_SECRET,
+                        wc_api=True, version="wc/v2")
 
             # Get list of attributes in WooCommerce
             attributes = wcapi.get("products/attributes").json()
@@ -59,9 +61,8 @@ class WooCommerceProduct(APIView):
 
     def get(self, request, format=None):
         try:
-            # Get API Key and create a WooCommerce API instance
-            api_key = WC_APIKey.objects.all()[0]
-            wcapi = API(url=api_key.url, consumer_key=api_key.consumer_key, consumer_secret=api_key.consumer_secret,
+            # Create a WooCommerce API instance
+            wcapi = API(url=settings.WOOCOMMERCE_URL, consumer_key=settings.CONSUMER_KEY, consumer_secret=settings.CONSUMER_SECRET,
                         wc_api=True, version="wc/v2")
 
             products_in_store = wcapi.get("products?per_page=100&type=variable").json()
