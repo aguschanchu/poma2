@@ -38,7 +38,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'product_id', 'product_attributes')
 
     def product_attributes(self, obj):
-        return " - ".join([p.name for p in obj.attributes.all()]).join(", ")
+        return " - ".join([p.name for p in obj.attributes.all()])
 
 class VariationAdmin(admin.ModelAdmin):
     list_display = ('name', 'variation_id', 'parent_product')

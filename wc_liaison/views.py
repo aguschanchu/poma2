@@ -5,9 +5,10 @@ from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from skynet.models import Color
-from wc_liaison.models import WC_APIKey, Attribute, AttributeTerm
+from wc_liaison.models import WC_APIKey, Attribute, AttributeTerm, Product
 from urllib.parse import urlencode
 from woocommerce import API
+from wc_liaison.serializers import ProductSerializer
 
 # on API Key requested to Woocommerce
 
@@ -56,9 +57,20 @@ class WoocommerceAttributes(APIView):
 
 class WooCommerceProduct(APIView):
 
-    def post(self, request, format=None):
+    def get(self, request, format=None):
         try:
-            a = 1
+            # Get API Key and create a WooCommerce API instance
+            api_key = WC_APIKey.objects.all()[0]
+            wcapi = API(url=api_key.url, consumer_key=api_key.consumer_key, consumer_secret=api_key.consumer_secret,
+                        wc_api=True, version="wc/v2")
+
+            products_in_store = wcapi.get("products?per_page=100&type=variable").json()
+            products = ProductSerializer(data=products_in_store, many=True)
+            if products.is_valid():
+                products.save()
+            else:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response(status=status.HTTP_201_CREATED)
         except:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
@@ -70,5 +82,25 @@ class WooCommerceOrder(APIView):
     def post(self, request, format=None):
         try:
             a = 1
+        except:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+class SerializeProduct(APIView):
+
+    def get(self, request, format=None):
+        try:
+            product = Product.objects.get(name='Luna 140mm')
+            serializer = ProductSerializer(product)
+            return Response(serializer.data)
+        except:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request, format=None):
+        try:
+            serializer = ProductSerializer(data=request.data, many=True)
+            if serializer.is_valid():
+                print(serializer.validated_data)
+                serializer.save()
+            return Response(status=status.HTTP_200_OK)
         except:
             return Response(status=status.HTTP_400_BAD_REQUEST)

@@ -47,8 +47,8 @@ class AttributeTerm(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=200)
-    product_id = models.IntegerField
-    sku = models.CharField(max_length=200)
+    product_id = models.IntegerField()
+    sku = models.CharField(max_length=200, null=True, blank=True)
     attributes = models.ManyToManyField(Attribute)
 
     def __str__(self):
