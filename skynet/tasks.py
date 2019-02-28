@@ -73,7 +73,8 @@ def quote_piece(piece):
         filename = settings.BASE_DIR + piece.gcode.print_file.url
 
         # TODO Implement this for other Slicing programs (Slimpify3D, Cura, etc)
-
+        # TODO check if there is an easy an universal way of reading which slicing
+        # program was used. before checking with evry single algorithm.
         slicing_programs = [slicer_parser]
 
         for program in slicing_programs:
