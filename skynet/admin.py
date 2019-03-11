@@ -1,5 +1,5 @@
 from django.contrib import admin
-from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament
+from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament, FilamentPurchase
 
 # Register your models here.
 
@@ -31,16 +31,23 @@ class MaterialBrandAdmin(admin.ModelAdmin):
         return "\n".join([p.name for p in obj.providers.all()])
 
 class FilamentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'brand', 'color', 'material', 'print_bed_temp', 'print_nozzle_temp', 'density', 'price_per_kg', 'stock')
+    list_display = ('name', 'brand', 'color', 'material', 'print_bed_temp', 'print_nozzle_temp', 'price_per_kg', 'stock')
     fieldsets = (
         (None, {
-            'fields': ('brand', 'color', 'material', 'stock')
+            'fields': ('brand', 'color', 'material')
         }),
         ('Advanced options', {
             'classes': ('collapse',),
             'fields': ('name', 'print_bed_temp', 'print_nozzle_temp', 'density', 'price_per_kg'),
         }),
     )
+
+    def stock(self, obj):
+        current_stock = 0
+        for purchase in FilamentPurchase.objects.all():
+            current_stock += purchase.quantity
+        return current_stock
+
 
 class PieceAdmin(admin.ModelAdmin):
     list_display = ()

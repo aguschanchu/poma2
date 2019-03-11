@@ -86,22 +86,22 @@ class WooCommerceOrder(APIView):
         except:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-class SerializeProduct(APIView):
-
-    def get(self, request, format=None):
-        try:
-            product = Product.objects.get(name='Luna 140mm')
-            serializer = ProductSerializer(product)
-            return Response(serializer.data)
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
-    def post(self, request, format=None):
-        try:
-            serializer = ProductSerializer(data=request.data, many=True)
-            if serializer.is_valid():
-                print(serializer.validated_data)
-                serializer.save()
-            return Response(status=status.HTTP_200_OK)
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+# class SerializeProduct(APIView):
+#
+#     def get(self, request, format=None):
+#         try:
+#             product = Product.objects.get(name='Luna 140mm')
+#             serializer = ProductSerializer(product)
+#             return Response(serializer.data)
+#         except:
+#             return Response(status=status.HTTP_400_BAD_REQUEST)
+#
+#     def post(self, request, format=None):
+#         try:
+#             serializer = ProductSerializer(data=request.data, many=True)
+#             if serializer.is_valid():
+#                 print(serializer.validated_data)
+#                 serializer.save()
+#             return Response(status=status.HTTP_200_OK)
+#         except:
+#             return Response(status=status.HTTP_400_BAD_REQUEST)
