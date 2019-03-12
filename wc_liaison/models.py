@@ -56,7 +56,7 @@ class AttributeTerm(models.Model):
 
 class Product(models.Model):
     """
-    Model for each product in the clients' WooCommerce. Variations associated to this product are available through
+    Model for each product in the clients' WooCommerce. Variations associated to this product, if any, are available through
     self.variations
     """
     name = models.CharField(max_length=200)
@@ -103,7 +103,7 @@ class Component(models.Model):
 
 class WC_Client(models.Model):
     """
-    Model for each client in the clients' WooCommerce database. Orders by the client are accessible through
+    Model for each client in the clients' WooCommerce database. Orders made by the client are accessible through
     self.orders
     """
     name = models.CharField(max_length=200)
