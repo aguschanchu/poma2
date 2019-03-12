@@ -12,6 +12,11 @@ class WcApiKey(models.Model):
 # Attribute Model
 
 class Attribute(models.Model):
+    """
+    Model for each attribute present in the clients' WooCommerce. Methods influences_color and influences_material
+    indicate wether any of the possible values of this attribute have implications on the color and material, respectively, with which
+    to print.
+    """
     name = models.CharField(max_length=200)
     uuid = models.IntegerField()
     slug = models.CharField(max_length=200)
@@ -34,6 +39,10 @@ class Attribute(models.Model):
 #  Attribute Term Model
 
 class AttributeTerm(models.Model):
+    """
+    Model for each attribute value possibility as defined in the clients' WooCommerce. Properties color_implications
+    and material_implications indicate color and materials, respectively, compatible with the corresponding attribute value, if any.
+    """
     attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE, related_name='terms')
     uuid = models.IntegerField(blank=True, null=True)
     option = models.CharField(max_length=200)
@@ -46,6 +55,10 @@ class AttributeTerm(models.Model):
 # Product Model
 
 class Product(models.Model):
+    """
+    Model for each product in the clients' WooCommerce. Variations associated to this product are available through
+    self.variations
+    """
     name = models.CharField(max_length=200)
     product_id = models.IntegerField(primary_key=True)
     sku = models.CharField(max_length=200, null=True, blank=True)
@@ -57,9 +70,13 @@ class Product(models.Model):
 # Variation of a product Model
 
 class Variation(models.Model):
+    """
+    Model for each variation of a variable product in the clients' WooCommerce. Components to print are accessible through
+    self.components
+    """
     name = models.CharField(max_length=200, blank=True, null=True)
     variation_id = models.CharField(max_length=200)
-    sku = models.CharField(max_length=200, blank=True)
+    sku = models.CharField(max_length=200)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variations')
     default_attributes = models.ManyToManyField(AttributeTerm)
 
@@ -72,15 +89,39 @@ class Variation(models.Model):
 # Component of a variation Model
 
 class Component(models.Model):
+    """
+    Model for a component of a variation or a simple product in the clients' WooCommerce. Components hold the information
+    for a specific file to print, such as the STL/OBJ file itself, its scale and the amount needed.
+    """
     scale = models.FloatField
     quantity = models.IntegerField
     stl = models.FileField(blank=True, null=True)
     gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
     variation = models.ForeignKey(Variation, on_delete=models.CASCADE, related_name='components')
 
-# WooCommerce Order Model (necessary?)
+# WooCommerce Client Model
+
+class WC_Client(models.Model):
+    """
+    Model for each client in the clients' WooCommerce database. Orders by the client are accessible through
+    self.orders
+    """
+    name = models.CharField(max_length=200)
+
+# WooCommerce Order Model
 
 class WC_Order(models.Model):
+    """
+    Model for an order made through WooCommerce. Items in the order are accessible through self.items
+    """
+    client = models.ForeignKey(WC_Client, on_delete=models.CASCADE, related_name='orders')
+    uuid = models.IntegerField()
+
+class WC_OrderItem(models.Model):
+    """
+    Model for an item in an order.
+    """
+    order = models.ForeignKey(WC_Order, on_delete=models.CASCADE, related_name='items')
     variation_id = models.CharField(max_length=200)
     quantity = models.IntegerField(default=1)
     attribute_terms = models.ManyToManyField(AttributeTerm)
