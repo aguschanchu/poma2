@@ -2,6 +2,21 @@
 
 from .models import Piece, Order, Printer, Filament
 from datetime import datetime, timedelta
+from math import pi
+
+
+def quote_order(order):
+    """ 
+    Funtion that quotes each piece of the order.
+    """
+    # Get all pieces of an order
+    pieces = order.pieces.all()
+
+    # Quote them one by one
+    for piece in pieces:
+        quote_piece(piece)
+
+    return
 
 
 def quote_piece(piece):
@@ -72,49 +87,110 @@ def quote_piece(piece):
         # Reads printing time from gcode file.
         filename = settings.BASE_DIR + piece.gcode.print_file.url
 
+        supported_slicers = [("Slic3r", slicer_parser),
+                             ("Simplify3D", simplify_parser),
+                             ("Cura", cura_parser)]
         # TODO Implement this for other Slicing programs (Slimpify3D, Cura, etc)
-        # TODO check if there is an easy an universal way of reading which slicing
-        # program was used. before checking with evry single algorithm.
-        slicing_programs = [slicer_parser]
+        # Determine which Slicing program was used.
+        slicer = ""
+        head = subprocess.check_output(
+            "head -5 "+filename, shell=True).decode("utf-8").split("\n")
+        for slicing_program in supported_slicers:
+            if (slicing_program[0] in head[0]) or (slicing_program[0] in head[4]):
+                try:
+                    time, weight = slicing_program[1](filename)
+                    piece.time = time
+                    piece.weight = weight
+                    piece.status = "101"  # FIXME Check if this state still holds
+                    piece.save()
+                    return True
+                except:
+                    break
 
-        for program in slicing_programs:
-            try:
-                ept = program(filename)  # Estimated printing time
-                piece.time = dt
-                piece.status = '101'  # FIXME Check if this state still holds
-                piece.save()
-                return True
-            except:
-                continue
+        # If it reaches this point, something failed in finding the printing time
+        # Set printing time to default for now..
+        # TODO consider asking the user to input it manually or leaving the default
 
-        # If none of the parsing algorithms worked, just set a default time
-        # TODO Decide if this is the way to go, or to warn the user that the
-        # printing time could not be found and therefore to slice again
-        ept = timedelta(hours=25)
-        piece.time = ept
-        piece.status = '101'  # FIXME Check if this state still holds
+        piece.time = timedelta(hours=20)  # Default printing time
+        piece.weight = 0.2  # Default weight
+        piece.status = "101"  # In queue status
         piece.save()
         return True
 
 
 def slicer_parser(print_file):
-    """ 
-    Algorithm to find the estimated printing time of a gcode file if it was sliced
-    using Slic3r.
-    """
+    """ Parser that reads the estimated printing time for gcodes that were
+    sliced with Slic3r. """
     # Find last lines of the file
     lines = subprocess.check_output(
-        "tail -350 "+filename, shell=True).decode("utf-8").replace("; ", "").split("\n")
+        "tail -350 "+filename, shell=True).decode("utf-8").split("\n")
     time_str = ""
+    length_str = ""
     # Search for line that contains the printing time
     for line in lines:
-        if "estimated printing time (normal mode)" in line:
+        if "filament used" in line:
+            length_str = line.split(" = ")[1]
+        if "estimated printing time" in line:
             time_str = line.split(" = ")[1]
             break
-        # TODO Also check for the estimated weight of the piece
 
-    # Parse the string to a timedelta format
-    time_ref = datetime.strptime(time_str, "%Hh %Mm %Ss")
-    basetime = datetime(1900, 1, 1)
-    dt = time_ref - basetime  # Estimated printing time
-    return dt
+    # Tries if it lasts more than an hour
+    if "h" in time_str:
+        hours = int(time_str.split("h ")[0])
+        minutes = int(time_str.split("h ")[1].split("m ")[0])
+        seconds = int(time_str.split("h ")[1].split("m ")[1].split("s")[0])
+    else:
+        hours = 0
+        # Less than an hour but more than a minute
+        if "m" in time_str:
+            minutes = int(time_str.split("m ")[0])
+            seconds = int(time_str.split("m ")[1].split("s")[0])
+        # And less than a minute
+        else:
+            minutes = 0
+            seconds = int(time_str.split("s")[0])
+
+    dt = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+
+    # Get weigth
+    length = int(length_str.split("mm")[0]) / 10  # in cm
+    # PLA Density: 1.25 g/cm3
+    radius = (piece.filament.diameter / 2) / 10  # in cm
+    density = piece.filament.density  # in g/cm^3
+    weight_g = radius**2 * pi * length * density  # in g
+    weight_kg = weight_g / 1000  # in kg
+
+    return dt, weight
+
+
+def simplify_parser(print_file):
+    """ Parser that reads the estimated printing time for gcodes that were
+    sliced with Simplify3D. """
+
+    lines = subprocess.check_output(
+        "tail -5 "+filename, shell=True).decode("utf-8").split("\n")
+
+    time_str = ""
+    weight_str = ""
+
+    for line in lines:
+        if "Build time" in line:
+            time_str = line.split(": ")[1]
+        if "Plastic weight" in lines:
+            weight_str = line.split(": ")[1]
+
+    if "hours" in time_str:
+        # TODO Continue this
+        time_str = line.split(": ")[1]
+        time_split = time_str.split(" hours ")
+        hours = int(time_split[0])
+        minutes = int(time_split[1].split(" minutes")[0])
+        dt = timedelta(hours=hours, minutes=minutes)
+    except:
+        pass
+    break
+
+
+def cura_parser(print_file):
+    """ Parser that reads the estimated printing time for gcodes that were
+    sliced with Cura. """
