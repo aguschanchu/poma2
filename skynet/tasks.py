@@ -16,6 +16,9 @@ def quote_order(order):
     for piece in pieces:
         quote_piece(piece)
 
+    order.status = "101"  # FIXME Define possible states of order
+    order.save()
+
     return
 
 
@@ -98,9 +101,16 @@ def quote_piece(piece):
         for slicing_program in supported_slicers:
             if (slicing_program[0] in head[0]) or (slicing_program[0] in head[4]):
                 try:
-                    time, weight = slicing_program[1](filename)
+                    time, length = slicing_program[1](filename)
+
+                    # Calculate weight from length
+                    radius = (piece.filament.diameter / 2) / 10  # in cm
+                    density = piece.filament.density  # in g/cm^3
+                    weight_g = radius**2 * pi * length * density  # in g
+                    weight_kg = weight_g / 1000  # in kg
+
                     piece.time = time
-                    piece.weight = weight
+                    piece.weight = weight_kg
                     piece.status = "101"  # FIXME Check if this state still holds
                     piece.save()
                     return True
@@ -152,15 +162,10 @@ def slicer_parser(print_file):
 
     dt = timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
-    # Get weigth
-    length = int(length_str.split("mm")[0]) / 10  # in cm
-    # PLA Density: 1.25 g/cm3
-    radius = (piece.filament.diameter / 2) / 10  # in cm
-    density = piece.filament.density  # in g/cm^3
-    weight_g = radius**2 * pi * length * density  # in g
-    weight_kg = weight_g / 1000  # in kg
+    # Get length
+    length = float(length_str.split("mm")[0]) / 10  # in cm
 
-    return dt, weight
+    return dt, length
 
 
 def simplify_parser(print_file):
@@ -171,26 +176,68 @@ def simplify_parser(print_file):
         "tail -5 "+filename, shell=True).decode("utf-8").split("\n")
 
     time_str = ""
-    weight_str = ""
+    length_str = ""
+    dt = timedelta(hours=25)  # Default printing time
+    length = 1000
 
     for line in lines:
         if "Build time" in line:
             time_str = line.split(": ")[1]
-        if "Plastic weight" in lines:
-            weight_str = line.split(": ")[1]
+        if "Filament length" in lines:
+            length_str = line.split(": ")[1]
 
-    if "hours" in time_str:
-        # TODO Continue this
-        time_str = line.split(": ")[1]
-        time_split = time_str.split(" hours ")
+    # Parse the printing time
+    if "hour" in time_str:
+        # Piece takes more than a hour to print
+        try:
+            # Piece takes more than 2 hours, hence the "hours" plural
+            time_split = time_str.split(" hours ")
+        except:
+            # Piece takes less than 2 hours, hence the "hour" singular
+            time_split = time_str.split(" hour ")
         hours = int(time_split[0])
         minutes = int(time_split[1].split(" minutes")[0])
         dt = timedelta(hours=hours, minutes=minutes)
+    else:
+        # Piece takes less than an hour to print
+        try:
+            minutes = int(time_str.split(" minutes")[0])
+            # TODO Test what happends with pieces that take less than a minute
+            dt = timedelta(minutes=minutes)
+        except:
+            pass
+
+    # Parse weight of the piece
+    try:
+        length = float(length_str.split(" mm ")[0]) / 10  # in cm
     except:
         pass
-    break
+
+    return dt, length
 
 
 def cura_parser(print_file):
     """ Parser that reads the estimated printing time for gcodes that were
     sliced with Cura. """
+
+    lines = subprocess.check_output(
+        "head -5 "+filename, shell=True).decode("utf-8").split("\n")
+
+    # Default values
+    dt = timedelta(hours=25)
+    length = 1000
+
+    for line in lines:
+        if "TIME" in line:
+            try:
+                seconds = int(line.split(":")[1])
+                dt = timedelta(seonds=seconds)
+            except:
+                pass
+        if "Filament used" in line:
+            try:
+                length = float(line.split(": ")[1].split("m")[0]) * 100
+            except:
+                pass
+
+    return dt, length
