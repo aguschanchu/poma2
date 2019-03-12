@@ -3,6 +3,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 
 # Color Model
 
+
 class Color(models.Model):
     name = models.CharField(max_length=100)
     sku = models.CharField(max_length=100)
@@ -68,7 +69,7 @@ class Filament(models.Model):
 class FilamentPurchase(models.Model):
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
     provider = models.ForeignKey(FilamentProvider, on_delete=models.CASCADE)
-    quantity = models.FloatField() # En kg
+    quantity = models.FloatField()  # En kg
     date = models.DateField()
 
 
@@ -120,6 +121,15 @@ class Piece(models.Model):
     time = models.DurationField(null=True, blank=True)
 
 
+class Scenario(models.Model):
+    uuid = models.IntegerField(default=0)
+
+
+class PrintOrder(models.Model):
+    scenario = models.ForeignKey(
+        Scenario, on_delete=models.CASCADE, related_name="print_orders")
+
+
 # Printer Type Model
 
 class PrinterType(models.Model):
@@ -147,3 +157,33 @@ class Printer(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# PrintJob Model
+class PrintJob(models.Model):
+    printer = models.ForeignKey(Printer)
+    status = models.CharField(max_length=50)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    estimated_time = models.DurationField(null=True, blank=True)
+
+
+class PrintJobPiece(models.Model):
+    piece = models.ForeignKey(Piece)
+    quantity = models.IntegerField()
+    print_job = models.ForeignKey(PrintJob, related_name="print_job_pieces")
+
+
+class TentativePrintJob(models.Model):
+    print_job = models.ForeignKey(
+        PrintJob, on_delete=models.CASCADE, related_name="print_job")
+    print_order = models.ForeignKey(
+        PrintOrder, on_delete=models.CASCADE, related_name="print_orders")
+    position = models.IntegerField()
+
+
+class UnitPiece(models.Model):
+    piece = models.ForeignKey(Piece, related_name='unit_pieces')
+    position = models.IntegerField(null=True, blank=True)
+    print_order = models.ForeignKey(PrintOrder)
+    tentative_pj = models.ForeignKey(TentativePrintJob, null=True, blank=True)
