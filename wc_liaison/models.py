@@ -35,19 +35,19 @@ class Attribute(models.Model):
 
 class AttributeTerm(models.Model):
     attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE, related_name='terms')
-    uuid = models.IntegerField()
-    value = models.CharField(max_length=200)
+    uuid = models.IntegerField(blank=True, null=True)
+    option = models.CharField(max_length=200)
     color_implications = models.ManyToManyField(Color, blank=True)
     material_implications = models.ManyToManyField(Material, blank=True)
 
     def __str__(self):
-        return self.value
+        return self.option
 
 # Product Model
 
 class Product(models.Model):
     name = models.CharField(max_length=200)
-    product_id = models.IntegerField()
+    product_id = models.IntegerField(primary_key=True)
     sku = models.CharField(max_length=200, null=True, blank=True)
     attributes = models.ManyToManyField(Attribute)
 
@@ -57,14 +57,17 @@ class Product(models.Model):
 # Variation of a product Model
 
 class Variation(models.Model):
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, blank=True, null=True)
     variation_id = models.CharField(max_length=200)
     sku = models.CharField(max_length=200, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variations')
     default_attributes = models.ManyToManyField(AttributeTerm)
 
     def __str__(self):
-        return self.name
+        if self.name:
+            return self.name
+        else:
+            return self.sku
 
 # Component of a variation Model
 

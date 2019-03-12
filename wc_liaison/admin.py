@@ -23,7 +23,7 @@ class AttributeAdmin(admin.ModelAdmin):
         return False
 
 class AttributeTermAdmin(admin.ModelAdmin):
-    list_display = ('value', 'parent_attribute', 'color_references', 'material_references')
+    list_display = ('option', 'parent_attribute', 'color_references', 'material_references')
 
     def parent_attribute(self, obj):
         return obj.attribute.name
