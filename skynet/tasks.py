@@ -241,3 +241,20 @@ def cura_parser(print_file):
                 pass
 
     return dt, length
+
+
+def create_printjob(pieces, printer):
+    """ 
+    Create a PrintJob object with a list of pieces supplied by the plan generator.
+
+    If the piece is a gcode it has to check that only one piece is in the list.
+
+    If it's a list of stl pieces, all have to be sliced together and request a
+    gcode.
+    """
+
+
+def change_filament(printjob):
+    """
+    Recieves
+    """
