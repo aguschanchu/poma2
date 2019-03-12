@@ -101,7 +101,7 @@ class Component(models.Model):
 
 # WooCommerce Client Model
 
-class WC_Client(models.Model):
+class Client(models.Model):
     """
     Model for each client in the clients' WooCommerce database. Orders made by the client are accessible through
     self.orders
@@ -110,21 +110,21 @@ class WC_Client(models.Model):
 
 # WooCommerce Order Model
 
-class WC_Order(models.Model):
+class Order(models.Model):
     """
     Model for an order made through WooCommerce. Items in the order are accessible through self.items
     """
-    client = models.ForeignKey(WC_Client, on_delete=models.CASCADE, related_name='orders')
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders')
     uuid = models.IntegerField()
 
-class WC_OrderItem(models.Model):
+class OrderItem(models.Model):
     """
     Model for an item in an order.
     """
-    order = models.ForeignKey(WC_Order, on_delete=models.CASCADE, related_name='items')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     variation_id = models.CharField(max_length=200)
     quantity = models.IntegerField(default=1)
-    attribute_terms = models.ManyToManyField(AttributeTerm)
+    attributes = models.ManyToManyField(AttributeTerm)
 
 
 
