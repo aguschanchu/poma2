@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from wc_liaison.models import Product, Attribute, Variation, AttributeTerm
+from wc_liaison.models import Product, Attribute, Variation, AttributeTerm, Order, OrderItem
 
  # Serializers
 
@@ -21,6 +21,11 @@ class AttributeTermSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttributeTerm
         fields = ('id', 'name', 'option')
+
+    def to_internal_value(self, data):
+        if 'id' not in data:
+            data['id'] = 0
+        return super(AttributeTermSerializer, self).to_internal_value(data)
 
 class ProductSerializer(serializers.ModelSerializer):
     """
@@ -79,4 +84,19 @@ class VariationSerializer(serializers.ModelSerializer):
                         variation.default_attributes.add(term)
             except Exception as e:
                 print(e)
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    attributes = serializers
+    parent_order = serializers.IntegerField(source='order.uuid')
+    class Meta:
+        model = OrderItem
+        fields = ('parent_order', 'variarion_id', 'quantity', 'attributes')
+
+class OrderSerializer(serializers.ModelSerializer):
+    order_number = serializers.IntegerField(source='uuid')
+    items = OrderItemSerializer(many=True)
+    class Meta:
+        model = Order
+        fields = ('client', 'order_number', 'items')
+
 
