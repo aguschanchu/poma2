@@ -8,7 +8,7 @@ from skynet.models import Color
 from wc_liaison.models import WcApiKey, Attribute, AttributeTerm, Product
 from urllib.parse import urlencode
 from woocommerce import API
-from wc_liaison.serializers import ProductSerializer, VariationSerializer
+from wc_liaison.serializers import ProductSerializer, VariationSerializer, OrderSerializer, OrderItemSerializer
 from django.conf import settings
 
 # on API Key requested to Woocommerce
@@ -44,7 +44,6 @@ class WoocommerceAttributes(APIView):
                     current_attribute.save()
                 # Get list of attribute terms
                 attribute_terms = wcapi.get(f"products/attributes/{attribute['id']}/terms").json()
-                print(attribute_terms)
                 for term in attribute_terms:
                     # If term does not exist, add it
                     try:
@@ -93,26 +92,34 @@ class WooCommerceOrder(APIView):
 
     def post(self, request, format=None):
         try:
-            a = 1
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
-class SerializeProduct(APIView):
-
-    def get(self, request, format=None):
-        try:
-            product = Product.objects.get(name='Luna 140mm')
-            serializer = ProductSerializer(product)
-            return Response(serializer.data)
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
-    def post(self, request, format=None):
-        try:
-            serializer = ProductSerializer(data=request.data, many=True)
+            serializer=OrderSerializer(data=request.data)
             if serializer.is_valid():
-                print(serializer.validated_data)
                 serializer.save()
-            return Response(status=status.HTTP_200_OK)
-        except:
+                return Response(status=status.HTTP_201_CREATED)
+            else:
+                print("WooCommerce Order Serializer not valid. Reason: ")
+                print(serializer.errors)
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(e)
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+# class SerializeProduct(APIView):
+#
+#     def get(self, request, format=None):
+#         try:
+#             product = Product.objects.get(name='Luna 140mm')
+#             serializer = ProductSerializer(product)
+#             return Response(serializer.data)
+#         except:
+#             return Response(status=status.HTTP_400_BAD_REQUEST)
+#
+#     def post(self, request, format=None):
+#         try:
+#             serializer = ProductSerializer(data=request.data, many=True)
+#             if serializer.is_valid():
+#                 print(serializer.validated_data)
+#                 serializer.save()
+#             return Response(status=status.HTTP_200_OK)
+#         except:
+#             return Response(status=status.HTTP_400_BAD_REQUEST)

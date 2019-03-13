@@ -18,7 +18,7 @@ class Attribute(models.Model):
     to print.
     """
     name = models.CharField(max_length=200)
-    uuid = models.IntegerField()
+    uuid = models.IntegerField(primary_key=True)
     slug = models.CharField(max_length=200)
 
     def influences_color(self):
@@ -75,7 +75,7 @@ class Variation(models.Model):
     self.components
     """
     name = models.CharField(max_length=200, blank=True, null=True)
-    variation_id = models.CharField(max_length=200)
+    variation_id = models.IntegerField()
     sku = models.CharField(max_length=200)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variations')
     default_attributes = models.ManyToManyField(AttributeTerm)
@@ -107,6 +107,9 @@ class Client(models.Model):
     self.orders
     """
     name = models.CharField(max_length=200)
+
+    def __str__(self):
+        return self.name
 
 # WooCommerce Order Model
 

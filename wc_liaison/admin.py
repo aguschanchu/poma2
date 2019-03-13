@@ -1,5 +1,5 @@
 from django.contrib import admin
-from wc_liaison.models import Attribute, AttributeTerm, Product, Variation, Component, WcApiKey
+from wc_liaison.models import Attribute, AttributeTerm, Product, Variation, Component, WcApiKey, OrderItem, Order, Client
 
 # Register your models here.
 
@@ -52,9 +52,43 @@ class ComponentAdmin(admin.ModelAdmin):
     def parent_variation(self, obj):
         return obj.variation.name
 
+class ClientAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ('uuid', 'client_name', 'items')
+
+    def client_name(self, obj):
+        return obj.client.name
+
+    def items(self, obj):
+        return " - ".join([f"{item.quantity}x {Variation.objects.get(variation_id=item.variation_id).name} " + ", ".join([attribute.option for attribute in item.attributes.all()]) for item in obj.items.all()])
+
+
+class OrderItemAdmin(admin.ModelAdmin):
+    list_display = ('order_number', 'variation_id', 'variation_name', 'quantity', 'attribute_values')
+
+    def order_number(self, obj):
+        return obj.order.uuid
+
+    def variation_name(self, obj):
+        try:
+            variation = Variation.objects.get(variation_id=obj.variation_id)
+            return variation.name
+        except Exception as e:
+            print(e)
+            return "Name not available"
+
+    def attribute_values(self, obj):
+        return " - ".join([f"{attribute_term.attribute.name}: {attribute_term.option}" for attribute_term in obj.attributes.all()])
+
+
 admin.site.register(WcApiKey, WC_APIKeyAdmin)
 admin.site.register(Attribute, AttributeAdmin)
 admin.site.register(AttributeTerm, AttributeTermAdmin)
 admin.site.register(Product, ProductAdmin)
 admin.site.register(Variation, VariationAdmin)
 admin.site.register(Component, ComponentAdmin)
+admin.site.register(Order, OrderAdmin)
+admin.site.register(OrderItem, OrderItemAdmin)
+admin.site.register(Client, ClientAdmin)

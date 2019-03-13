@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from wc_liaison.models import Product, Attribute, Variation, AttributeTerm, Order, OrderItem
+from wc_liaison.models import Product, Attribute, Variation, AttributeTerm, Order, OrderItem, Client
+from skynet.models import Order as PoMaOrder
 
  # Serializers
 
@@ -86,17 +87,49 @@ class VariationSerializer(serializers.ModelSerializer):
                 print(e)
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    attributes = serializers
-    parent_order = serializers.IntegerField(source='order.uuid')
+    """
+    Serializer for the OrderItem class. Parent order is encoded through its 'uuid'. It is passed on to the
+    OrderItemSerializer through context upon instantiation.
+    """
+    attributes = AttributeTermSerializer(many=True)
     class Meta:
         model = OrderItem
-        fields = ('parent_order', 'variarion_id', 'quantity', 'attributes')
+        fields = ('variation_id', 'quantity', 'attributes')
 
 class OrderSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Order class. Property 'uuid' is encoded through 'order_number'.
+    Serializer create() method overwritten to create a main Order from the WooCommerce Order.
+    """
     order_number = serializers.IntegerField(source='uuid')
     items = OrderItemSerializer(many=True)
+    client = serializers.CharField(source='client.name')
     class Meta:
         model = Order
         fields = ('client', 'order_number', 'items')
+
+    def create(self, validated_data):
+        # Get Client
+        client,created = Client.objects.get_or_create(name=validated_data['client']['name'])
+        # Create WooCommerce Order
+        wc_order = Order(client=client, uuid=validated_data['uuid'])
+        wc_order.save()
+
+        # Create associated WooCommerce Order Items
+        for item in validated_data['items']:
+            wc_order_item = OrderItem(order=wc_order, variation_id=item['variation_id'], quantity=item['quantity'])
+            wc_order_item.save()
+
+            # Add attribute values
+            for item_attribute in item['attributes']:
+                attribute = Attribute.objects.get(uuid=item_attribute['attribute']['uuid'])
+                attribute_term = AttributeTerm.objects.get(attribute=attribute, option=item_attribute['option'])
+                wc_order_item.attributes.add(attribute_term)
+
+        return wc_order
+
+
+
+
 
 

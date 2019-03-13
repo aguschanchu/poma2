@@ -161,7 +161,7 @@ class Printer(models.Model):
 
 # PrintJob Model
 class PrintJob(models.Model):
-    printer = models.ForeignKey(Printer)
+    printer = models.ForeignKey(Printer, on_delete=models.CASCADE)
     status = models.CharField(max_length=50)
     start_time = models.DateTimeField(null=True, blank=True)
     end_time = models.DateTimeField(null=True, blank=True)
@@ -169,9 +169,9 @@ class PrintJob(models.Model):
 
 
 class PrintJobPiece(models.Model):
-    piece = models.ForeignKey(Piece)
+    piece = models.ForeignKey(Piece, on_delete=models.CASCADE)
     quantity = models.IntegerField()
-    print_job = models.ForeignKey(PrintJob, related_name="print_job_pieces")
+    print_job = models.ForeignKey(PrintJob, related_name="print_job_pieces", on_delete=models.CASCADE)
 
 
 class TentativePrintJob(models.Model):
@@ -183,7 +183,7 @@ class TentativePrintJob(models.Model):
 
 
 class UnitPiece(models.Model):
-    piece = models.ForeignKey(Piece, related_name='unit_pieces')
+    piece = models.ForeignKey(Piece, related_name='unit_pieces', on_delete=models.CASCADE)
     position = models.IntegerField(null=True, blank=True)
-    print_order = models.ForeignKey(PrintOrder)
-    tentative_pj = models.ForeignKey(TentativePrintJob, null=True, blank=True)
+    print_order = models.ForeignKey(PrintOrder, on_delete=models.CASCADE)
+    tentative_pj = models.ForeignKey(TentativePrintJob, null=True, blank=True, on_delete=models.CASCADE)
