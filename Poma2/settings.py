@@ -136,3 +136,10 @@ CELERY_QUEUES = ('celery')
 
 # Slaicer configuration
 
+
+
+# Temp WooCommerce API Key
+
+WOOCOMMERCE_URL = "https://tercerojo.creame3d.com"
+CONSUMER_KEY = "ck_b400211280df3fbb2fa7a37c1eec68b0de8f169a"
+CONSUMER_SECRET = "cs_807f8bf3bd27bcd7c1c6c6d097504c7a924f520a"
