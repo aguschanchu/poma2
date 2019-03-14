@@ -1,0 +1,7 @@
+django
+django_rest_framework
+celery
+django_celery_results
+numpy
+trimesh
+django_nose
