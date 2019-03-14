@@ -109,13 +109,13 @@ class Piece(models.Model):
     order = models.ForeignKey(
         Order, on_delete=models.CASCADE, related_name='pieces')
     scale = models.FloatField(default=1.0)
-    print_settings = models.ForeignKey(PrintSettings, on_delete=models.CASCADE)
+    print_settings = models.ForeignKey(PrintSettings, on_delete=models.CASCADE, blank=True, null=True)
     copies = models.IntegerField(default=1)
     completed = models.IntegerField(default=0)
     stl = models.FileField(blank=True, null=True)
     gcode = models.ForeignKey(
         Gcode, on_delete=models.CASCADE, blank=True, null=True)
-    filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
+    filaments = models.ManyToManyField(Filament)
     status = models.CharField(max_length=200)
     weight = models.FloatField(null=True, blank=True)
     time = models.DurationField(null=True, blank=True)

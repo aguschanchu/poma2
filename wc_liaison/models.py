@@ -75,7 +75,7 @@ class Variation(models.Model):
     self.components
     """
     name = models.CharField(max_length=200, blank=True, null=True)
-    variation_id = models.IntegerField()
+    variation_id = models.IntegerField(primary_key=True)
     sku = models.CharField(max_length=200)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variations')
     default_attributes = models.ManyToManyField(AttributeTerm)
@@ -93,8 +93,8 @@ class Component(models.Model):
     Model for a component of a variation or a simple product in the clients' WooCommerce. Components hold the information
     for a specific file to print, such as the STL/OBJ file itself, its scale and the amount needed.
     """
-    scale = models.FloatField
-    quantity = models.IntegerField
+    scale = models.FloatField()
+    quantity = models.IntegerField()
     stl = models.FileField(blank=True, null=True)
     gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
     variation = models.ForeignKey(Variation, on_delete=models.CASCADE, related_name='components')

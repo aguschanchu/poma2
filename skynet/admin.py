@@ -1,5 +1,5 @@
 from django.contrib import admin
-from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament, FilamentPurchase
+from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament, FilamentPurchase, Order, Piece
 
 # Register your models here.
 
@@ -50,12 +50,12 @@ class FilamentAdmin(admin.ModelAdmin):
 
 
 class PieceAdmin(admin.ModelAdmin):
-    list_display = ()
+    list_display = ('order', 'scale', 'copies', 'completed', 'stl', 'status')
 
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ()
+    list_display = ('client', 'order_number', 'due_date', 'priority')
 
-class PrinerAdmin(admin.ModelAdmin):
+class PrinterAdmin(admin.ModelAdmin):
     list_display = ()
 
 admin.site.register(Color, ColorAdmin)
@@ -63,3 +63,5 @@ admin.site.register(Material, MaterialAdmin)
 admin.site.register(FilamentProvider, FilamentProviderAdmin)
 admin.site.register(MaterialBrand, MaterialBrandAdmin)
 admin.site.register(Filament, FilamentAdmin)
+admin.site.register(Order, OrderAdmin)
+admin.site.register(Piece, PieceAdmin)
