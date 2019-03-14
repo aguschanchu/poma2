@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'skynet.apps.SkynetConfig',
     'wc_liaison.apps.WcLiaisonConfig',
+    'slaicer.apps.SlaicerConfig',
     'rest_framework'
 ]
 
@@ -121,3 +122,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
 
 STATIC_URL = '/static/'
+MEDIA_ROOT = 'media/'
+MEDIA_URL = '/media/'
+
+#Celery config
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_BROKER_URL = 'amqp://'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_SOFT_TIME_LIMIT = 600*3
+CELERY_CHORD_UNLOCK_MAX_RETRIES = 60
+CELERY_PREFETCH_MULTIPLIER = 1
+CELERY_QUEUES = ('celery')
+
+# Slaicer configuration
+
