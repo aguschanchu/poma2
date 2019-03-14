@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from wc_liaison.models import Product, Attribute, Variation, Component, AttributeTerm, Order, OrderItem, Client
 from skynet.models import Order as PoMaOrder, Piece, Material, Color, Filament
-from skynet.serializers import OrderSerializer as PoMaOrderSerializer
 from datetime import datetime, timedelta
 
  # Serializers
@@ -150,8 +149,6 @@ class OrderSerializer(serializers.ModelSerializer):
                 piece.save()
                 for compatible_filament in compatible_filaments:
                     piece.filaments.add(compatible_filament)
-
-
 
         return wc_order
 
