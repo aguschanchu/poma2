@@ -50,7 +50,11 @@ class FilamentAdmin(admin.ModelAdmin):
 
 
 class PieceAdmin(admin.ModelAdmin):
-    list_display = ('order', 'scale', 'copies', 'completed', 'stl', 'status')
+    list_display = ('order', 'scale', 'copies', 'completed', 'stl', 'compatible_filaments','status')
+
+    def compatible_filaments(self, obj):
+        return " - ".join([f"{filament.material.name} {filament.color.name}" for filament in obj.filaments.all()])
+
 
 class OrderAdmin(admin.ModelAdmin):
     list_display = ('client', 'order_number', 'due_date', 'priority')
