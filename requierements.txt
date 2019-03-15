@@ -5,3 +5,4 @@ django_celery_results
 numpy
 trimesh
 django_nose
+woocommerce

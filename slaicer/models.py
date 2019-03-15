@@ -19,7 +19,7 @@ class ConfigurationFile(models.Model):
     name = models.CharField(max_length=200)
     version = models.CharField(max_length=10)
     # TODO: Proveer metodo para actualizar automaticamente. Usar sintaxis del repo de prusa3d
-    provider = models.CharField(max_length=300, null=True, validators=URLValidator)
+    provider = models.CharField(max_length=300, null=True, validators=[URLValidator])
     file = models.FileField(upload_to='slaicer/configuration_files/')
 
 
@@ -101,7 +101,7 @@ Trabajo de sliceo. Acepta multiples STLs
 
 class SliceJob(models.Model):
     # Especificacion de perfil
-    profile = models.ForeignKey(SliceConfiguration)
+    profile = models.ForeignKey(SliceConfiguration, on_delete=models.SET_NULL, null=True)
     # Parametros de trabajo
     stl = models.ManyToManyField(STLFile)
     save_gcode = models.BooleanField(default=False)
