@@ -5,3 +5,4 @@
 *.pyc
 migrations
 db.sqlite3
+lib
