@@ -3,6 +3,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator, URLVali
 from skynet.models import Material
 import datetime
 from django.contrib.postgres.fields import JSONField
+from .tools import slicer_profiles_helper
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -19,36 +20,39 @@ n 1,3, pues una 0,15 en una CR10 es en calidad similar a una MK3 en 0,2 (0,2/0,1
 class ConfigurationFile(models.Model):
     name = models.CharField(max_length=200)
     version = models.CharField(max_length=10)
+    vendor = models.CharField(max_length=300, null=True)
     # TODO: Proveer metodo para actualizar automaticamente. Usar sintaxis del repo de prusa3d
     provider = models.CharField(max_length=300, null=True, validators=[URLValidator])
     file = models.FileField(upload_to='slaicer/configuration_files/')
 
+    def import_available_profiles(self):
+        slicer_profiles_helper.import_available_profiles(self)
+
 
 class PrinterProfile(models.Model):
     name = models.CharField(max_length=300)
-    vendor = models.CharField(max_length=300, null=True)
     base_quality = models.FloatField(default=1)
     # config_name es el nombre que se utiliza en la configuracion referenciada
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
     # guardamos todos los atributos que no nos interesan aca
-    config = JSONField()
+    config = JSONField(null=True)
 
 
 class MaterialProfile(models.Model):
-    material = models.ForeignKey(Material, on_delete=models.CASCADE)
+    material = models.ForeignKey(Material, on_delete=models.CASCADE, null=True)
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
-    config = JSONField()
+    config = JSONField(null=True)
 
 
 class PrintProfile(models.Model):
     layer_height = models.FloatField()
-    infill_density = models.IntegerField(validators=[MaxValueValidator(100), MinValueValidator(0)])
+    fill_density = models.IntegerField(validators=[MaxValueValidator(100), MinValueValidator(0)])
     support_material = models.NullBooleanField()
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
-    config = JSONField()
+    config = JSONField(null=True)
 
 
 '''
@@ -98,11 +102,13 @@ class STLFile(models.Model):
     geometry_req = models.BooleanField(default=True)
     scale = models.FloatField(default=1)
 
+
 '''
 Trabajo de sliceo. Acepta multiples STLs
  - weight: Peso de la impresion, en kg
  - build_time: Tiempo de impresion, en segundos
 '''
+
 
 class SliceJob(models.Model):
     # Especificacion de perfil
@@ -120,4 +126,22 @@ class SliceJob(models.Model):
     gcode = models.FileField(upload_to='slaicer/gcode/')
 
 
+'''
+Modelos accesorios
+'''
+
+
+#Una configuracion puede tener muchos perfiles al pedo, que no se usan. Por eso, se almacenan en un estado intermedio, hasta que se importa
+class AvailableProfile(models.Model):
+    types = (
+        ('print', 'Print profile'),
+        ('filament', 'Material profile'),
+        ('printer', 'Printer profile')
+    )
+    profile_type = models.CharField(choices=types, max_length=200)
+    config_name = models.CharField(max_length=200)
+    config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
+
+    def convert(self):
+        slicer_profiles_helper.convert_available_profile_to_model(self)
 
