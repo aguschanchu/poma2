@@ -79,8 +79,15 @@ WSGI_APPLICATION = 'Poma2.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'poma',
+        'USER': 'poma',
+        'PASSWORD': 'EgCn7f8HMiufkO',
+        'HOST': '127.0.0.1',
+        'PORT': '',
+        'OPTIONS': {
+           'sslmode': 'disable',
+        }
     }
 }
 

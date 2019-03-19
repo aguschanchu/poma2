@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
 from skynet.models import Material
 import datetime
+from django.contrib.postgres.fields import JSONField
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -30,12 +31,15 @@ class PrinterProfile(models.Model):
     # config_name es el nombre que se utiliza en la configuracion referenciada
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
+    # guardamos todos los atributos que no nos interesan aca
+    config = JSONField()
 
 
 class MaterialProfile(models.Model):
     material = models.ForeignKey(Material, on_delete=models.CASCADE)
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
+    config = JSONField()
 
 
 class PrintProfile(models.Model):
@@ -44,6 +48,7 @@ class PrintProfile(models.Model):
     support_material = models.NullBooleanField()
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
+    config = JSONField()
 
 
 '''
