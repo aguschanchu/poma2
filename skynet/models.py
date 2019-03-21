@@ -130,6 +130,15 @@ class PrintOrder(models.Model):
         Scenario, on_delete=models.CASCADE, related_name="print_orders")
 
 
+class OctoprintConnection(models.Model):
+    url = models.CharField(max_length=200)
+    apikey = models.CharField(max_length=200)
+
+    def issue_command(self):
+
+    def print_file(self):
+
+
 # Printer Type Model
 
 class PrinterType(models.Model):
@@ -149,8 +158,7 @@ class Printer(models.Model):
     name = models.CharField(max_length=200)
     uuid = models.IntegerField()
     printer_type = models.ForeignKey(PrinterType, on_delete=models.CASCADE)
-    url = models.CharField(max_length=200, blank=False)
-    apikey = models.CharField(max_length=32, blank=False)
+    connection = models.OneToOneField(OctoprintConnection, related_name='source', on_delete=models.CASCADE)
     status = models.CharField(max_length=20, default='New')
     remaining_time = models.DurationField(default=0)
     file_name = models.CharField(max_length=100, blank=True)
