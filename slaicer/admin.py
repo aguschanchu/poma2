@@ -48,3 +48,7 @@ class ConfigurationFileAdmin(admin.ModelAdmin):
     import_profile.short_description = "Import selected profiles"
 
 
+@admin.register(GeometryModel)
+class PrinterProfileAdmin(admin.ModelAdmin):
+    list_display = ('file',)
+

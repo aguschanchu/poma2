@@ -2,7 +2,7 @@ from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
 from skynet.models import Material
 import datetime
-from django.contrib.postgres.fields import JSONField
+from django.contrib.postgres.fields import JSONField, ArrayField
 from .tools import slicer_profiles_helper
 
 '''
@@ -77,7 +77,11 @@ Un archivo STL es la entrada requerida por el Slic3r. Consta de informacion de s
 
 
 class TweakerResult(models.Model):
-    unprintability_factor = models.FloatField(default=0)
+    unprintability_factor = models.FloatField(default=0, null=True)
+    rotation_matrix = ArrayField(ArrayField(models.FloatField(), size=3), size=3, null=True)
+    size_x = models.FloatField(blank=True,default=0)
+    size_y = models.FloatField(blank=True,default=0)
+    size_z = models.FloatField(blank=True,default=0)
     task_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (Tweak)
     error_log = models.CharField(max_length=300, null=True)
@@ -86,19 +90,16 @@ class TweakerResult(models.Model):
 class GeometryResult(models.Model):
     mean_layer_height = models.FloatField(default=0.15)
     plot = models.ImageField(upload_to='slaicer/plots/')
-    size_x = models.FloatField(blank=True,default=0)
-    size_y = models.FloatField(blank=True,default=0)
-    size_z = models.FloatField(blank=True,default=0)
     task_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (Geom)
     error_log = models.CharField(max_length=300, null=True)
 
 
-class STLFile(models.Model):
-    file = models.FileField(upload_to='slaicer/stl/')
-    orientation = models.ForeignKey(TweakerResult, on_delete=models.SET_NULL, null=True)
+class GeometryModel(models.Model):
+    file = models.FileField(upload_to='slaicer/geometry/')
+    orientation = models.OneToOneField(TweakerResult, on_delete=models.SET_NULL, null=True, blank=True)
     orientation_req = models.BooleanField(default=True)
-    geometry = models.ForeignKey(GeometryResult, on_delete=models.SET_NULL, null=True)
+    geometry = models.OneToOneField(GeometryResult, on_delete=models.SET_NULL, null=True, blank=True)
     geometry_req = models.BooleanField(default=True)
     scale = models.FloatField(default=1)
 
@@ -114,7 +115,7 @@ class SliceJob(models.Model):
     # Especificacion de perfil
     profile = models.ForeignKey(SliceConfiguration, on_delete=models.SET_NULL, null=True)
     # Parametros de trabajo
-    stl = models.ManyToManyField(STLFile)
+    stl = models.ManyToManyField(GeometryModel)
     save_gcode = models.BooleanField(default=False)
     created = models.DateTimeField(default=datetime.datetime.now)
     task_id = models.CharField(max_length=50)
