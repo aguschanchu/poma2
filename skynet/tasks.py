@@ -62,12 +62,13 @@ def quote_piece(piece):
                 #     return False
 
                 time.sleep(1)
+        except:
+            pass
+        piece.save()  # Guarda los datos en la DB
+        return True
 
-            piece.save()  # Guarda los datos en la DB
-            return True
-
-    # If the piece conatins a gcode file, then it has to be parsed to find the
-    # estimated printing time
+     # If the piece conatins a gcode file, then it has to be parsed to find the
+     # estimated printing time
     if piece.gcode:
         # Reads printing time from gcode file.
         filename = settings.BASE_DIR + piece.gcode.print_file.url
