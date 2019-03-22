@@ -31,7 +31,7 @@ if __name__ == '__main__':
     import django
     import warnings
     os.environ.setdefault('DJANGO_SETTINGS_MODULE',
-                          'Poma2.settings')
+                          'poma2.settings')
     django.setup()
     from django.contrib.auth.models import User
     from django.conf import settings
