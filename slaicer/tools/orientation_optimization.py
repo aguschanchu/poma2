@@ -47,8 +47,8 @@ def generate_tweaker_result(geometrymodel):
     # Una vez con el STL cargado, ejecutamos el optimizador
 
     tweaker_settings = {
-        'extended_mode' : True,
-        'verbose' : False,
+        'extended_mode': True,
+        'verbose': False,
         'show_progress':  False,
         'favside': None,
         'volume': None

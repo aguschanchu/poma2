@@ -15,4 +15,4 @@ sudo -u postgres -H -- psql -c "GRANT ALL PRIVILEGES ON DATABASE poma TO poma"
 python manage.py makemigrations slaicer
 python manage.py makemigrations skynet
 python manage.py migrate
-#python populate.py
+python populate.py

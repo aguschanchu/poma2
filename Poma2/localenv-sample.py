@@ -1,0 +1,3 @@
+CURRENT_HOST = 'localhost'
+CURRENT_PROTOCOL = 'http'
+CURRENT_PORT = 8000
