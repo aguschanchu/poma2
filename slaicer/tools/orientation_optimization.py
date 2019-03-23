@@ -29,7 +29,7 @@ def generate_tweaker_result(geometrymodel):
         raise ValueError("Error importing FileHandler. Please remove the ThreeMF import line from slaicer/lib/Tweaker-3/FileHandler.py")
 
     try:
-        path = geometrymodel.file.path
+        path = geometrymodel.get_model_path()
         FileHandlerInstance = FileHandler.FileHandler()
         objs = FileHandlerInstance.load_mesh(path)
         if objs is None:
@@ -70,21 +70,10 @@ def generate_tweaker_result(geometrymodel):
             info[part]["matrix"] = x.matrix
             info[part]["tweaker_stats"] = x
 
-            # Tenemos lo necesario, guardamos
-            tweaker_result = geometrymodel.orientation
-            tweaker_result.unprintability_factor = x.unprintability
-            tweaker_result.rotation_matrix = x.matrix.tolist()
-            tweaker_result.save(update_fields=['unprintability_factor', 'rotation_matrix'])
-
         except (KeyboardInterrupt, SystemExit):
             raise SystemExit("\nError, tweaking process failed!")
+    return x
 
-    # Guardamos la geometria del objeto
-    tweaker_result = geometrymodel.orientation
-    mesh = trimesh.load_mesh(geometrymodel.file.path)
-    tweaker_result.size_x = mesh.bounding_box.primitive.extents[0]
-    tweaker_result.size_y = mesh.bounding_box.primitive.extents[1]
-    tweaker_result.size_z = mesh.bounding_box.primitive.extents[2]
-    tweaker_result.save(update_fields = ['size_x', 'size_y', 'size_z'])
+
 
 

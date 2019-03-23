@@ -3,7 +3,18 @@ from django.core.validators import MaxValueValidator, MinValueValidator, URLVali
 from skynet.models import Material
 import datetime
 from django.contrib.postgres.fields import JSONField, ArrayField
+from django.contrib.sites.models import Site
+from django.conf import settings
 from .tools import slicer_profiles_helper
+from . import tasks
+import os
+import string
+import random
+from celery.result import AsyncResult
+from urllib3.util import Retry
+from urllib3 import PoolManager, ProxyManager, Timeout
+from urllib3.exceptions import MaxRetryError, TimeoutError
+
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -16,6 +27,13 @@ Algunas definiciones a tener en cuenta:
 A mayor numero, significa que es una máquina peor. Por definicion, en el caso de una MK3 es 1. Por ejemplo, una CR10 es 
 n 1,3, pues una 0,15 en una CR10 es en calidad similar a una MK3 en 0,2 (0,2/0,15 = 1,3)
 '''
+
+def get_connection_pool():
+    retry_policy = Retry(total=5, backoff_factor=0.1, status_forcelist=list(range(405, 501)))
+    timeout_policy = Timeout(read=10, connect=5)
+    http = PoolManager(retries=retry_policy, timeout=timeout_policy)
+
+    return http
 
 class ConfigurationFile(models.Model):
     name = models.CharField(max_length=200)
@@ -82,15 +100,17 @@ class TweakerResult(models.Model):
     size_x = models.FloatField(blank=True,default=0)
     size_y = models.FloatField(blank=True,default=0)
     size_z = models.FloatField(blank=True,default=0)
-    task_id = models.CharField(max_length=50)
+    celery_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (Tweak)
     error_log = models.CharField(max_length=300, null=True)
 
+    def ready(self):
+        return AsyncResult(self.celery_id).ready()
 
 class GeometryResult(models.Model):
     mean_layer_height = models.FloatField(default=0.15)
     plot = models.ImageField(upload_to='slaicer/plots/')
-    task_id = models.CharField(max_length=50)
+    celery_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (Geom)
     error_log = models.CharField(max_length=300, null=True)
 
@@ -102,6 +122,36 @@ class GeometryModel(models.Model):
     geometry = models.OneToOneField(GeometryResult, on_delete=models.SET_NULL, null=True, blank=True)
     geometry_req = models.BooleanField(default=True)
     scale = models.FloatField(default=1)
+
+    # The worker may be running on a different server, so, we might need to fetch the model from the database server
+    def get_model_path(self):
+        if os.path.exists(self.file.path):
+            return self.file.path
+        else:
+            # We need to download the file
+            http = get_connection_pool()
+            url = "{protocol}://{domain}{url}".format(**{'protocol': settings.CURRENT_PROTOCOL,
+                                                         'domain': Site.objects.get_current().domain,
+                                                         'url': self.file.url})
+            path = "{base_dir}/tmp/{id}-{rand_string}.{extension}".format(**{'base_dir': settings.BASE_DIR,
+                                                                             'id': self.id,
+                                                                             'rand_string': ''.join(random.choice(string.ascii_letters) for m in range(10)),
+                                                                             'extension': self.file.name.split('.')[-1]})
+
+        with open(path, 'wb') as file:
+            file.write(http.request('GET', url).data)
+        return path
+
+
+    def create_orientation_result(self):
+        # Does the instance exists already?
+        if not self.orientation is None:
+            return None
+        # Ok, no, lets create the task
+        task = tasks.fill_tweaker_result.s(self.id).apply_async()
+        self.orientation = TweakerResult.objects.create(celery_id=task.id)
+        self.save(update_fields=['geometry'])
+
 
 
 '''
@@ -118,7 +168,7 @@ class SliceJob(models.Model):
     stl = models.ManyToManyField(GeometryModel)
     save_gcode = models.BooleanField(default=False)
     created = models.DateTimeField(default=datetime.datetime.now)
-    task_id = models.CharField(max_length=50)
+    celery_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (SliceJob)
     error_log = models.CharField(max_length=300, null=True)
     # Resultados de trabajo

@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'wc_liaison.apps.WcLiaisonConfig',
     'slaicer.apps.SlaicerConfig',
     'django.contrib.sites',
+    # Celery
+    'django_celery_results',
     'rest_framework'
 ]
 
