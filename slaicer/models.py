@@ -125,6 +125,7 @@ class GeometryModel(models.Model):
 
     # The worker may be running on a different server, so, we might need to fetch the model from the database server
     def get_model_path(self):
+        print(self.file.path)
         if os.path.exists(self.file.path):
             return self.file.path
         else:
@@ -150,8 +151,16 @@ class GeometryModel(models.Model):
         # Ok, no, lets create the task
         task = tasks.fill_tweaker_result.s(self.id).apply_async()
         self.orientation = TweakerResult.objects.create(celery_id=task.id)
-        self.save(update_fields=['geometry'])
+        self.save(update_fields=['orientation'])
 
+    def create_geometry_result(self):
+        # Does the instance exists already?
+        if not self.geometry is None:
+            return None
+        # Ok, no, lets create the task
+        task = tasks.fill_geometry_result.s(self.id).apply_async()
+        self.geometry = GeometryResult.objects.create(celery_id=task.id)
+        self.save(update_fields=['geometry'])
 
 
 '''

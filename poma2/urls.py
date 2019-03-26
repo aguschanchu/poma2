@@ -21,6 +21,7 @@ from django.conf import settings
 urlpatterns = [
     path('wc_liaison/', include('wc_liaison.urls')),
     path('skynet/', include('skynet.urls')),
+    path('slaicer/', include('slaicer.urls')),
     path('admin/', admin.site.urls),
 ]
 

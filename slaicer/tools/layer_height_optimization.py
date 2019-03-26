@@ -1,8 +1,13 @@
 import numpy as np
 import trimesh
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+import random, string, matplotlib, io
+import numpy as np
+from django.core.files.base import ContentFile
 
 
-class OptimizarAlturaDeCapa:
+class LayerHeightOptimizer:
     # Factor de calidad. Es el maximo stepover admitido en mm
     q_factor = 0.4
 
@@ -30,7 +35,7 @@ class OptimizarAlturaDeCapa:
 
     @classmethod
     def import_from_geometrymodel(cls, geometrymodel):
-        mesh = trimesh.load_mesh(geometrymodel.file.path)
+        mesh = trimesh.load_mesh(geometrymodel.get_model_path())
         triangles_count = len(mesh.triangles)
         # Completamos los arrays:
         limits_inf = np.empty(triangles_count)
@@ -123,3 +128,17 @@ class OptimizarAlturaDeCapa:
         altura_de_capa_permitido = np.arange(0, (
                     self.max_layer_height - self.min_layer_height) / self.step_layer_height + self.step_layer_height) * self.step_layer_height + self.min_layer_height
         return altura_de_capa_permitido[np.abs(altura_de_capa_permitido - layer_height).argmin()]
+
+    # Returns layers_profile plot as django ContentFile
+    def plot_layers_profile(self):
+        if self.layers_profile == None:
+            print("Calcular primero el perfil de altura de capa")
+            return False
+        f = matplotlib.figure.Figure()
+        buf = io.BytesIO()
+        canvas = FigureCanvasAgg(f)
+        ax = f.add_subplot(111)
+        lp = self.layers_profile
+        ax.plot([0]+[lp[i-1]+lp[i] for i in range(1, len(lp))], lp)
+        canvas.print_png(buf)
+        return ContentFile(buf.getvalue())

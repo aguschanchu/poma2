@@ -15,4 +15,4 @@ git clone https://github.com/prusa3d/Slic3r
 cd Slic3r
 git checkout origin/stable
 mkdir build && cd build
-cmake .. && make
+cmake .. && make -j8
