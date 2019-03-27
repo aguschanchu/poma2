@@ -12,7 +12,9 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 import json
 from django.core.exceptions import ValidationError
-
+from django.core.files import File
+import random, string
+import traceback
 # Color Model
 
 
@@ -167,9 +169,13 @@ class OctoprintTask(models.Model):
                   ('job', 'Print job'))
     celery_id = models.CharField(max_length=200, null=True)
     connection = models.ForeignKey('OctoprintConnection', on_delete=models.CASCADE, related_name='tasks')
-    # Instead of just sending the command to octoprint, we'll wait until it finishes
-    wait_for_completion = models.BooleanField(default=False)
-    type = models.CharField(choices=task_types, default='job')
+    type = models.CharField(choices=task_types, default='job', max_length=200)
+    # Accepts multiple commands, separated each one with a newline ('\n')
+    commands = models.TextField(null=True)
+    file = models.FileField(null=True)
+    # Used to track task status
+    job_sent = models.BooleanField(default=False)
+    job_filename = models.CharField(max_length=300, null=True)
     objects = OctoprintTaskManager()
 
     @property
@@ -180,10 +186,17 @@ class OctoprintTask(models.Model):
     def ready(self):
         return AsyncResult(self.celery_id).ready()
 
+
 class OctoprintJobStatus(models.Model):
     name = models.CharField(max_length=300, null=True)
     estimated_print_time = models.IntegerField(null=True)
     estimated_print_time_left = models.IntegerField(null=True)
+
+
+class OctoprintTemperature(models.Model):
+    tool = models.FloatField(null=True)
+    bed = models.FloatField(null=True)
+
 
 class OctoprintStatus(models.Model):
     cancelling = models.BooleanField(default=False)
@@ -198,7 +211,9 @@ class OctoprintStatus(models.Model):
     resuming = models.BooleanField(default=False)
     sdReady = models.BooleanField(default=False)
     connectionError = models.BooleanField(default=False)
-    job = models.OneToOneField(OctoprintJobStatus, on_delete=models.CASCADE)
+    last_update = models.DateTimeField(auto_now=True)
+    temperature = models.OneToOneField(OctoprintTemperature, on_delete=models.CASCADE, null=True)
+    job = models.OneToOneField(OctoprintJobStatus, on_delete=models.CASCADE, null=True)
 
     @property
     def instance_ready(self):
@@ -220,25 +235,45 @@ class OctoprintConnection(models.Model):
         timeout_policy = Timeout(read=10, connect=5)
         return PoolManager(retries=retry_policy, timeout=timeout_policy)
 
-    def _get_connection_headers(self):
-        return {'x-api-key': self.apikey}
+    def _get_connection_headers(self, json_content: bool = True):
+        if json_content:
+            return {'x-api-key': self.apikey, 'Content-Type': 'application/json'}
+        else:
+            return {'x-api-key': self.apikey}
 
-    def _issue_command(self, command: str):
+    def _issue_command(self, commands: str):
+        fields = {'commands': commands.split('\n')}
         r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/printer/command'),
                                                 headers=self._get_connection_headers(),
-                                                fields={'command': command})
+                                                body=json.dumps(fields).encode('utf-8'))
         if r.status == 204:
             return True
         else:
             raise MaxRetryError("Error sending command to instance")
 
-    def _print_file(self):
-        pass
+    def _print_file(self, file: File):
+        # Accepts Django File or ContentFile class
+        file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode' if file.name is None else file.name
+        with file.open('r') as f:
+            # We add a M400 command at the end of the file, so, we avoid problems due marlin gcode cache
+            file_content = f.read() + 'M400 \nM115'
+            r = json.loads(self._get_connection_pool().request('POST', urljoin(self.url, 'api/files/local'),
+                                                               headers=self._get_connection_headers(json_content=False),
+                                                               fields={'print': True,
+                                                                       'file': (file_name, file_content)}).data.decode('utf-8'))
+
+        if r.get('done'):
+            return file_name
+        else:
+            raise MaxRetryError("Error sending command to instance")
 
     # Check if octoprint API url is valid
     def ping(self):
-        r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/version'),
-                                                           headers=self._get_connection_headers()).data.decode('utf-8'))
+        try:
+            r = self._get_connection_pool().request('GET', urljoin(self.url, 'api/version'),
+                                                    headers=self._get_connection_headers())
+        except MaxRetryError:
+            return False
         if r.status == 200:
             return True
         else:
@@ -246,9 +281,15 @@ class OctoprintConnection(models.Model):
 
     def update_status(self):
         try:
+            # Instance status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/printer'),
                                                                headers=self._get_connection_headers()).data.decode('utf-8'))
-            OctoprintStatus.objects.filter(octoprintconnection=self).update(**r['state']['flags'])
+            OctoprintStatus.objects.filter(octoprintconnection=self).update(**r['state']['flags'], connectionError = False)
+            self.refresh_from_db()
+            if 'temperature' in r.keys():
+                self.status.temperature.tool = r['temperature'].get('tool0')
+                self.status.temperature.bed = r['temperature'].get('bed')
+            # Job status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/job'),
                                                                headers=self._get_connection_headers()).data.decode('utf-8'))
             self.status.job.name = r['job']['file']['name']
@@ -256,9 +297,9 @@ class OctoprintConnection(models.Model):
             self.status.job.estimated_print_time_left = r['progress']['printTimeLeft']
             self.status.job.save()
         except:
+            traceback.print_exc()
             self.status.connectionError = True
-        self.status.last_update = timezone.now
-        self.status.save()
+            self.status.save()
 
 @receiver(pre_save, sender=OctoprintConnection)
 def validate_octoprint_connection_on_creation(sender, instance, update_fields, **kwargs):
@@ -267,20 +308,13 @@ def validate_octoprint_connection_on_creation(sender, instance, update_fields, *
         if not instance.ping():
             raise ValidationError("Error on connecting to octoprint instance")
 
-@receiver(post_save, sender=OctoprintStatus)
+@receiver(post_save, sender=OctoprintConnection)
 def create_octoprint_state(sender, instance, created, **kwargs):
     if created:
-        o = OctoprintJobStatus.objects.create()
-        instance.job = o
-        instance.save()
-
-@receiver(post_save, sender=OctoprintConnection)
-def create_octoprint_job_state(sender, instance, created, **kwargs):
-    if created:
-        o = OctoprintStatus.objects.create()
+        o = OctoprintStatus.objects.create(job=OctoprintJobStatus.objects.create(),
+                                           temperature=OctoprintTemperature.objects.create())
         instance.status = o
         instance.save()
-
 
 
 
