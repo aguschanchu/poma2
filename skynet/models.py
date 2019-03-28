@@ -15,9 +15,10 @@ from django.core.exceptions import ValidationError
 from django.core.files import File
 import random, string
 import traceback
+from django_celery_beat.models import PeriodicTask, IntervalSchedule
+
+
 # Color Model
-
-
 class Color(models.Model):
     name = models.CharField(max_length=100)
     sku = models.CharField(max_length=100)
@@ -161,8 +162,19 @@ OctoprintConnection handles API endpoints with octoprint
 '''
 
 class OctoprintTaskManager(models.Manager):
+    def create_task(self, connection, commands=None, file=None):
+        # It's a valid task?
+        if file is None and commands is None or commands is not None and file is not None:
+            raise ValidationError("Please specify a command or a file")
+        if file is not None:
+            o = self.create(type='job', file=file, connection=connection)
+        else:
+            # So, it's a command task. Before, we check if the object received is a file, or just a string
+            if hasattr(commands, 'open'):
+                commands = commands.open('r').read()
+            o = self.create(type='command', commands=commands, connection=connection)
+        return o
 
-    pass
 
 class OctoprintTask(models.Model):
     task_types = (('command', 'Command'),
@@ -267,6 +279,10 @@ class OctoprintConnection(models.Model):
         else:
             raise MaxRetryError("Error sending command to instance")
 
+    @property
+    def connection_ready(self):
+        return not self.locked and self.status.instance_ready
+
     # Check if octoprint API url is valid
     def ping(self):
         try:
@@ -301,6 +317,10 @@ class OctoprintConnection(models.Model):
             self.status.connectionError = True
             self.status.save()
 
+    def create_task(self, commands=None, file=None):
+        return OctoprintTask.objects.create_task(self, commands, file)
+
+
 @receiver(pre_save, sender=OctoprintConnection)
 def validate_octoprint_connection_on_creation(sender, instance, update_fields, **kwargs):
     # No update_fields were specified, so, probably it's a new instance
@@ -315,8 +335,13 @@ def create_octoprint_state(sender, instance, created, **kwargs):
                                            temperature=OctoprintTemperature.objects.create())
         instance.status = o
         instance.save()
-
-
+        # Status update scheduling
+        # TODO: Modify update period accordingly to task
+        schedule, created = IntervalSchedule.objects.get_or_create(every=2, period=IntervalSchedule.SECONDS)
+        PeriodicTask.objects.create(interval=schedule,
+                                    name='Update OctoprintConnection id {}'.format(instance.pk),
+                                    task='skynet.tasks.update_octoprint_status',
+                                    kargs=json.dumps({'conn_id': instance.pk}))
 
 # Printer Model
 

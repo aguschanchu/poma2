@@ -40,7 +40,9 @@ INSTALLED_APPS = [
     'skynet.apps.SkynetConfig',
     'wc_liaison.apps.WcLiaisonConfig',
     'slaicer.apps.SlaicerConfig',
-    'rest_framework'
+    'rest_framework',
+    'django_celery_results',
+    'django_celery_beat'
 ]
 
 MIDDLEWARE = [
@@ -133,6 +135,7 @@ CELERY_TASK_SOFT_TIME_LIMIT = 600*3
 CELERY_CHORD_UNLOCK_MAX_RETRIES = 60
 CELERY_PREFETCH_MULTIPLIER = 1
 CELERY_QUEUES = ('celery')
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers.DatabaseScheduler'
 
 # Slaicer configuration
 

@@ -1,10 +1,9 @@
 # Various tasks for PoMa 2
-
+from __future__ import absolute_import, unicode_literals
+from celery import shared_task, group
 from .models import *
 from datetime import datetime, timedelta
 from math import pi
-from __future__ import absolute_import, unicode_literals
-from celery import shared_task, group
 
 def quote_order(order):
     """ 
@@ -84,6 +83,8 @@ def quote_piece(piece):
 
             piece.save()  # Guarda los datos en la DB
             return True
+        except:
+            pass
 
     # If the piece conatins a gcode file, then it has to be parsed to find the
     # estimated printing time
@@ -271,13 +272,14 @@ class PrintNotFinished(Exception):
    pass
 
 
-@shared_task(queue='celery', autoretry_for=(PrintNotFinished), max_retries=None, default_retry_delay=2)
-def send_octoprint_task(task: OctoprintTask):
+@shared_task(queue='celery', autoretry_for=(PrintNotFinished,), max_retries=None, default_retry_delay=2)
+def send_octoprint_task(task_id):
     """ 
     Sends OctoprintTask to printer. In case we need to wait for completion, the task will keep raising PrintNotFinished
     exception, until the print finishes. Please don't send printjobs using this task. Instead, use OctoprintTask
     object manager
     """
+    task = OctoprintTask.objects.get(pk=task_id)
     # type: command
     if task.type == 'command':
         return task.connection._issue_command(task.commands)
@@ -297,6 +299,35 @@ def send_octoprint_task(task: OctoprintTask):
         raise PrintNotFinished
     else:
         return True
+
+
+@shared_task(queue='celery')
+def update_octoprint_status(conn_id):
+    connection = OctoprintConnection.objects.get(pk=conn_id)
+    connection.update_status()
+
+
+@shared_task(queue='celery')
+def octoprint_task_dispatcher():
+    """
+    Checks for pending OctoprintTasks on each connection, and starts the task
+    """
+    for conn in OctoprintConnection.objects.all():
+        # Update current task
+        if conn.active_task is not None:
+            if conn.active_task.ready:
+                # We clear the current task
+                conn.active_task = None
+        # Send new task
+        if conn.active_task is None and conn.connection_ready:
+            t = conn.tasks.filter(celery_id=None).first()
+            # Mark task as active
+            conn.active_task = t
+            conn.save()
+            # Send task to celery queue
+            ct = send_octoprint_task.delay(t.id)
+            t.celery_id = ct.id
+            t.save()
 
 
 
