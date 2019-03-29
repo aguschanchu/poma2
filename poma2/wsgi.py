@@ -1,5 +1,5 @@
 """
-WSGI config for Poma2 project.
+WSGI config for poma2 project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
