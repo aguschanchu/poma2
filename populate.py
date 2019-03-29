@@ -1,5 +1,6 @@
 import os
 
+
 def superuser_setup(User):
     #Superuser config
     username = 'admin'
@@ -7,7 +8,6 @@ def superuser_setup(User):
     password = 'Outreach'
 
     u = User.objects.create_superuser(username, email, password)
-
 
 
 def site_config(Site):
@@ -26,6 +26,14 @@ def check_for_lib():
         warnings.warn("Libraries aren't configured correctly. Please run slaicer/populare_lib.sh")
 
 
+def set_octoprint_dispatcher_scheduler():
+    global PeriodicTask, IntervalSchedule
+    schedule, created = IntervalSchedule.objects.get_or_create(every=1, period=IntervalSchedule.SECONDS)
+    PeriodicTask.objects.create(interval=schedule,
+                                name='Octoprint dispatcher',
+                                task='skynet.tasks.octoprint_task_dispatcher')
+
+
 if __name__ == '__main__':
     print('\n' + ('=' * 80) + '\n')
     import django
@@ -36,6 +44,7 @@ if __name__ == '__main__':
     from django.contrib.auth.models import User
     from django.conf import settings
     from django.contrib.sites.models import Site
+    from django_celery_beat.models import PeriodicTask, IntervalSchedule
     import os
     import subprocess
     print('Populating Database...')
@@ -43,4 +52,5 @@ if __name__ == '__main__':
     superuser_setup(User)
     site_config(Site)
     check_for_lib()
+    set_octoprint_dispatcher_scheduler()
 

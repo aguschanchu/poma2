@@ -1,9 +1,9 @@
 # Various tasks for PoMa 2
-
-from .models import Piece, Order, Printer, Filament
+from __future__ import absolute_import, unicode_literals
+from celery import shared_task, group
+from .models import *
 from datetime import datetime, timedelta
 from math import pi
-
 
 def quote_order(order):
     """ 
@@ -80,13 +80,14 @@ def quote_piece(piece):
                 #     return False
 
                 time.sleep(1)
+
+            piece.save()  # Guarda los datos en la DB
+            return True
         except:
             pass
-        piece.save()  # Guarda los datos en la DB
-        return True
 
-     # If the piece conatins a gcode file, then it has to be parsed to find the
-     # estimated printing time
+    # If the piece conatins a gcode file, then it has to be parsed to find the
+    # estimated printing time
     if piece.gcode:
         # Reads printing time from gcode file.
         filename = settings.BASE_DIR + piece.gcode.print_file.url
@@ -253,9 +254,85 @@ def create_printjob(pieces, printer):
     If it's a list of stl pieces, all have to be sliced together and request a
     gcode.
     """
+    pass
 
 
 def change_filament(printjob):
     """
     Recieves
     """
+    pass
+
+
+'''
+OctoprintConnection Celery tasks
+'''
+class PrintNotFinished(Exception):
+   """Print not finished exception, used for celery autoretry"""
+   pass
+
+
+@shared_task(queue='celery', autoretry_for=(PrintNotFinished,), max_retries=None, default_retry_delay=2)
+def send_octoprint_task(task_id):
+    """ 
+    Sends OctoprintTask to printer. In case we need to wait for completion, the task will keep raising PrintNotFinished
+    exception, until the print finishes. Please don't send printjobs using this task. Instead, use OctoprintTask
+    object manager
+    """
+    task = OctoprintTask.objects.get(pk=task_id)
+    # type: command
+    if task.type == 'command':
+        task.job_sent = True
+        task.save()
+        return task.connection._issue_command(task.commands)
+    # type: job
+    ## Let's send the job
+    if not task.job_sent:
+        t = task.connection._print_file(task.file)
+        if t is not None:
+            task.job_sent = True
+            task.job_filename = t
+            task.save()
+            task.connection.update_status()
+    ## The printer should be working by now. Let's check for job completion
+    if not task.job_filename == task.connection.status.job.name:
+        raise ValueError("Incorrect job name. Printer was manually controlled, so, we lost job tracking")
+    if task.connection.status.printing:
+        raise PrintNotFinished
+        print("Printing")
+    else:
+        return True
+
+
+@shared_task(queue='celery')
+def update_octoprint_status(conn_id):
+    connection = OctoprintConnection.objects.get(pk=conn_id)
+    connection.update_status()
+
+
+@shared_task(queue='celery')
+def octoprint_task_dispatcher():
+    """
+    Checks for pending OctoprintTasks on each connection, and starts the task
+    """
+    for conn in OctoprintConnection.objects.all():
+        # Update current task
+        if conn.active_task is not None:
+            if conn.active_task.ready:
+                # We clear the current task
+                conn.active_task = None
+        # Send new task
+        if conn.active_task is None and conn.connection_ready:
+            # Do we have pending tasks?
+            if conn.tasks.filter(celery_id=None).exists():
+                t = conn.tasks.filter(celery_id=None).first()
+                # Mark task as active
+                conn.active_task = t
+                conn.save()
+                # Send task to celery queue
+                ct = send_octoprint_task.delay(t.id)
+                t.celery_id = ct.id
+                t.save()
+
+
+

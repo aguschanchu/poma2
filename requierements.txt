@@ -2,7 +2,9 @@ django
 django_rest_framework
 celery
 django_celery_results
+django_celery_beat
 numpy
 trimesh
 django_nose
 woocommerce
+psycopg2-binary
