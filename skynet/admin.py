@@ -1,5 +1,5 @@
 from django.contrib import admin
-from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament, FilamentPurchase, Order, Piece
+from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament, FilamentPurchase, Order, Piece, OctoprintConnection, OctoprintTask, OctoprintStatus
 
 # Register your models here.
 
@@ -69,3 +69,26 @@ admin.site.register(MaterialBrand, MaterialBrandAdmin)
 admin.site.register(Filament, FilamentAdmin)
 admin.site.register(Order, OrderAdmin)
 admin.site.register(Piece, PieceAdmin)
+
+@admin.register(OctoprintConnection)
+class OctoprintConnectionAdmin(admin.ModelAdmin):
+    list_display = ('url', 'apikey', 'active_task_running')
+    fieldsets = (
+        (None, {
+            'fields': ('url', 'apikey', 'active_task')
+        }),
+    )
+
+    def active_task_running(self, obj):
+        return False if obj.active_task is None else True
+
+    active_task_running.boolean = True
+
+@admin.register(OctoprintTask)
+class OctoprintTaskAdmin(admin.ModelAdmin):
+    list_display = ('connection', 'type', 'file', 'job_sent', 'ready')
+
+    def ready(self, obj):
+        return obj.ready
+
+    ready.boolean = True

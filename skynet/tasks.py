@@ -282,6 +282,8 @@ def send_octoprint_task(task_id):
     task = OctoprintTask.objects.get(pk=task_id)
     # type: command
     if task.type == 'command':
+        task.job_sent = True
+        task.save()
         return task.connection._issue_command(task.commands)
     # type: job
     ## Let's send the job
@@ -295,8 +297,9 @@ def send_octoprint_task(task_id):
     ## The printer should be working by now. Let's check for job completion
     if not task.job_filename == task.connection.status.job.name:
         raise ValueError("Incorrect job name. Printer was manually controlled, so, we lost job tracking")
-    if task.status.printing:
+    if task.connection.status.printing:
         raise PrintNotFinished
+        print("Printing")
     else:
         return True
 
@@ -320,14 +323,16 @@ def octoprint_task_dispatcher():
                 conn.active_task = None
         # Send new task
         if conn.active_task is None and conn.connection_ready:
-            t = conn.tasks.filter(celery_id=None).first()
-            # Mark task as active
-            conn.active_task = t
-            conn.save()
-            # Send task to celery queue
-            ct = send_octoprint_task.delay(t.id)
-            t.celery_id = ct.id
-            t.save()
+            # Do we have pending tasks?
+            if conn.tasks.filter(celery_id=None).exists():
+                t = conn.tasks.filter(celery_id=None).first()
+                # Mark task as active
+                conn.active_task = t
+                conn.save()
+                # Send task to celery queue
+                ct = send_octoprint_task.delay(t.id)
+                t.celery_id = ct.id
+                t.save()
 
 
 

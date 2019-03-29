@@ -167,7 +167,9 @@ class OctoprintTaskManager(models.Manager):
         if file is None and commands is None or commands is not None and file is not None:
             raise ValidationError("Please specify a command or a file")
         if file is not None:
-            o = self.create(type='job', file=file, connection=connection)
+            file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode'
+            o = self.create(type='job', connection=connection)
+            o.file.save(file_name, file)
         else:
             # So, it's a command task. Before, we check if the object received is a file, or just a string
             if hasattr(commands, 'open'):
@@ -192,11 +194,17 @@ class OctoprintTask(models.Model):
 
     @property
     def status(self):
-        return AsyncResult(self.celery_id).state
+        if self.celery_id is None:
+            return 'PENDING'
+        else:
+            return AsyncResult(self.celery_id).state
 
     @property
     def ready(self):
-        return AsyncResult(self.celery_id).ready()
+        if self.celery_id is None:
+            return False
+        else:
+            return AsyncResult(self.celery_id).ready()
 
 
 class OctoprintJobStatus(models.Model):
@@ -318,7 +326,7 @@ class OctoprintConnection(models.Model):
             self.status.save()
 
     def create_task(self, commands=None, file=None):
-        return OctoprintTask.objects.create_task(self, commands, file)
+        return OctoprintTask.objects.create_task(self, commands=commands, file=file)
 
 
 @receiver(pre_save, sender=OctoprintConnection)
@@ -339,9 +347,9 @@ def create_octoprint_state(sender, instance, created, **kwargs):
         # TODO: Modify update period accordingly to task
         schedule, created = IntervalSchedule.objects.get_or_create(every=2, period=IntervalSchedule.SECONDS)
         PeriodicTask.objects.create(interval=schedule,
-                                    name='Update OctoprintConnection id {}'.format(instance.pk),
+                                    name='Update OctoprintConnection id {}'.format(instance.id),
                                     task='skynet.tasks.update_octoprint_status',
-                                    kargs=json.dumps({'conn_id': instance.pk}))
+                                    kwargs=json.dumps({'conn_id': instance.id}))
 
 # Printer Model
 

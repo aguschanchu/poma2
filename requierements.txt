@@ -7,3 +7,4 @@ numpy
 trimesh
 django_nose
 woocommerce
+psycopg2-binary
