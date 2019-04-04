@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import *
+from django.utils.html import format_html_join, format_html
 
 
 @admin.register(PrinterProfile)
@@ -47,8 +48,39 @@ class ConfigurationFileAdmin(admin.ModelAdmin):
 
     import_profile.short_description = "Import selected profiles"
 
+class GeometryResultInline(admin.StackedInline):
+    model = GeometryResult
+    fields = ('mean_layer_height', 'image', 'error_log')
+    readonly_fields = ('image',)
+
+    def image(self, obj):
+        return format_html('<img src=' + obj.plot.url + ' width="40%" height="40%"></img>')
+
+class TweakerResultInline(admin.StackedInline):
+    model = TweakerResult
+    fields = ('unprintability_factor', 'size_x', 'size_y', 'size_z', 'error_log', 'matrix')
+    readonly_fields = ('matrix',)
+
+    def matrix(self, obj):
+        return obj.rotation_matrix
+
 
 @admin.register(GeometryModel)
-class PrinterProfileAdmin(admin.ModelAdmin):
-    list_display = ('file',)
+class GeometryModelAdmin(admin.ModelAdmin):
+    list_display = ('id', 'file','orientation_result_ready', 'geometry_result_ready')
+    inlines = [GeometryResultInline, TweakerResultInline]
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        obj.create_orientation_result()
+        obj.create_geometry_result()
+
+    def orientation_result_ready(self, obj):
+        return obj.orientation_result_ready
+
+    def geometry_result_ready(self, obj):
+        return obj.geometry_result_ready
+
+    geometry_result_ready.boolean = True
+    orientation_result_ready.boolean = True
 

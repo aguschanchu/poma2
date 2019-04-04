@@ -2,6 +2,12 @@
 rm -r slaicer/migrations
 rm -r skynet/migrations
 
+# Media folder preparation
+mkdir media/gcode
+mkdir media/slaicer
+mkdir media/slaicer/configuration_files
+mkdir media/slaicer/geometry
+
 
 #PSQL DB preparation
 if psql --version > /dev/null 2>&1; then

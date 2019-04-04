@@ -15,7 +15,6 @@ from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError, TimeoutError
 
-
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
 de impresion, de filamento, y de impresora. El primero de estos, corresponde a un archivo ini (config-bundle de Slic3r)
@@ -28,12 +27,14 @@ A mayor numero, significa que es una máquina peor. Por definicion, en el caso d
 n 1,3, pues una 0,15 en una CR10 es en calidad similar a una MK3 en 0,2 (0,2/0,15 = 1,3)
 '''
 
+
 def get_connection_pool():
     retry_policy = Retry(total=5, backoff_factor=0.1, status_forcelist=list(range(405, 501)))
     timeout_policy = Timeout(read=10, connect=5)
     http = PoolManager(retries=retry_policy, timeout=timeout_policy)
 
     return http
+
 
 class ConfigurationFile(models.Model):
     name = models.CharField(max_length=200)
@@ -80,13 +81,14 @@ que desprenden de este.
 
 
 class SliceConfiguration(models.Model):
-    printer = models.ForeignKey(PrinterProfile, on_delete=models.SET_NULL, null=True)
-    material = models.ForeignKey(MaterialProfile, on_delete=models.SET_NULL, null=True)
+    printer = models.ForeignKey(PrinterProfile, on_delete=models.SET_NULL)
+    material = models.ForeignKey(MaterialProfile, on_delete=models.SET_NULL)
     print = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True)
 
     @property
     def print_quality(self):
         return self.printer.base_quality * self.print.layer_height
+
 
 '''
 Un archivo STL es la entrada requerida por el Slic3r. Consta de informacion de su orientabilidad
@@ -97,31 +99,46 @@ Un archivo STL es la entrada requerida por el Slic3r. Consta de informacion de s
 class TweakerResult(models.Model):
     unprintability_factor = models.FloatField(default=0, null=True)
     rotation_matrix = ArrayField(ArrayField(models.FloatField(), size=3), size=3, null=True)
-    size_x = models.FloatField(blank=True,default=0)
-    size_y = models.FloatField(blank=True,default=0)
-    size_z = models.FloatField(blank=True,default=0)
+    size_x = models.FloatField(blank=True, default=0, null=True)
+    size_y = models.FloatField(blank=True, default=0, null=True)
+    size_z = models.FloatField(blank=True, default=0, null=True)
     celery_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (Tweak)
     error_log = models.CharField(max_length=300, null=True)
+    geometry_model = models.OneToOneField('GeometryModel', related_name='orientation', blank=True,
+                                          on_delete=models.CASCADE)
 
     def ready(self):
-        return AsyncResult(self.celery_id).ready()
+        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+
 
 class GeometryResult(models.Model):
-    mean_layer_height = models.FloatField(default=0.15)
-    plot = models.ImageField(upload_to='slaicer/plots/')
-    celery_id = models.CharField(max_length=50)
+    mean_layer_height = models.FloatField(default=0.15, null=True)
+    plot = models.ImageField(upload_to='slaicer/plots/', null=True)
+    celery_id = models.CharField(max_length=50, null=True)
     # TODO: Discretizar errores posibles (Geom)
     error_log = models.CharField(max_length=300, null=True)
+    geometry_model = models.OneToOneField('GeometryModel', related_name='geometry', blank=True,
+                                          on_delete=models.CASCADE)
+
+    def ready(self):
+        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+
+
+class GeometryModelManager(models.Manager):
+    def create_object(self, file, orientation_req=True, geometry_req=True, scale=1):
+        o = self.create(file=file, orientation_req=orientation_req, geometry_req=geometry_req, scale=scale)
+        o.create_orientation_result()
+        o.create_geometry_result()
+        return o
 
 
 class GeometryModel(models.Model):
     file = models.FileField(upload_to='slaicer/geometry/')
-    orientation = models.OneToOneField(TweakerResult, on_delete=models.SET_NULL, null=True, blank=True)
     orientation_req = models.BooleanField(default=True)
-    geometry = models.OneToOneField(GeometryResult, on_delete=models.SET_NULL, null=True, blank=True)
     geometry_req = models.BooleanField(default=True)
     scale = models.FloatField(default=1)
+    objects = GeometryModelManager()
 
     # The worker may be running on a different server, so, we might need to fetch the model from the database server
     def get_model_path(self):
@@ -136,31 +153,39 @@ class GeometryModel(models.Model):
                                                          'url': self.file.url})
             path = "{base_dir}/tmp/{id}-{rand_string}.{extension}".format(**{'base_dir': settings.BASE_DIR,
                                                                              'id': self.id,
-                                                                             'rand_string': ''.join(random.choice(string.ascii_letters) for m in range(10)),
-                                                                             'extension': self.file.name.split('.')[-1]})
+                                                                             'rand_string': ''.join(
+                                                                                 random.choice(string.ascii_letters) for
+                                                                                 m in range(10)),
+                                                                             'extension': self.file.name.split('.')[
+                                                                                 -1]})
 
         with open(path, 'wb') as file:
             file.write(http.request('GET', url).data)
         return path
 
-
     def create_orientation_result(self):
         # Does the instance exists already?
-        if not self.orientation is None:
+        if hasattr(self, 'orientation') or not self.orientation_req:
             return None
         # Ok, no, lets create the task
         task = tasks.fill_tweaker_result.s(self.id).apply_async()
-        self.orientation = TweakerResult.objects.create(celery_id=task.id)
-        self.save(update_fields=['orientation'])
+        TweakerResult.objects.create(geometry_model=self, celery_id=task.id)
+
+    @property
+    def orientation_result_ready(self):
+        return False if not hasattr(self, 'orientation') else self.orientation.ready()
 
     def create_geometry_result(self):
         # Does the instance exists already?
-        if not self.geometry is None:
+        if hasattr(self, 'geometry') or not self.geometry_req:
             return None
         # Ok, no, lets create the task
         task = tasks.fill_geometry_result.s(self.id).apply_async()
-        self.geometry = GeometryResult.objects.create(celery_id=task.id)
-        self.save(update_fields=['geometry'])
+        GeometryResult.objects.create(geometry_model=self, celery_id=task.id)
+
+    @property
+    def geometry_result_ready(self):
+        return False if not hasattr(self, 'geometry') else self.geometry.ready()
 
 
 '''
@@ -170,11 +195,16 @@ Trabajo de sliceo. Acepta multiples STLs
 '''
 
 
+class SliceJobManager(models.Manager):
+    def create_object(self, model, profile=None, save_gcode=True):
+        pass
+
+
 class SliceJob(models.Model):
     # Especificacion de perfil
     profile = models.ForeignKey(SliceConfiguration, on_delete=models.SET_NULL, null=True)
     # Parametros de trabajo
-    stl = models.ManyToManyField(GeometryModel)
+    geometry_models = models.ManyToManyField(GeometryModel)
     save_gcode = models.BooleanField(default=False)
     created = models.DateTimeField(default=datetime.datetime.now)
     celery_id = models.CharField(max_length=50)
@@ -191,7 +221,7 @@ Modelos accesorios
 '''
 
 
-#Una configuracion puede tener muchos perfiles al pedo, que no se usan. Por eso, se almacenan en un estado intermedio, hasta que se importa
+# Una configuracion puede tener muchos perfiles al pedo, que no se usan. Por eso, se almacenan en un estado intermedio, hasta que se importa
 class AvailableProfile(models.Model):
     types = (
         ('print', 'Print profile'),
@@ -204,4 +234,3 @@ class AvailableProfile(models.Model):
 
     def convert(self):
         slicer_profiles_helper.convert_available_profile_to_model(self)
-

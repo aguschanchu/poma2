@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator, MinLengthValidator
 import urllib3
 from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
@@ -21,7 +21,8 @@ from django_celery_beat.models import PeriodicTask, IntervalSchedule
 # Color Model
 class Color(models.Model):
     name = models.CharField(max_length=100)
-    sku = models.CharField(max_length=100)
+    #Hex color code
+    code = models.CharField(max_length=6, validators=[MinLengthValidator(6)])
 
     def __str__(self):
         return self.name
@@ -31,7 +32,7 @@ class Color(models.Model):
 
 class Material(models.Model):
     name = models.CharField(max_length=200)
-    sku = models.CharField(max_length=200)
+    sku = models.CharField(max_length=200, unique=True)
     print_bed_temp = models.IntegerField()
     print_nozzle_temp = models.IntegerField()
 
@@ -43,7 +44,7 @@ class Material(models.Model):
 
 class FilamentProvider(models.Model):
     name = models.CharField(max_length=200)
-    sku = models.CharField(max_length=200)
+    sku = models.CharField(max_length=200, unique=True)
     telephone = models.CharField(max_length=200)
     email = models.EmailField()
 
@@ -85,13 +86,13 @@ class FilamentPurchase(models.Model):
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
     provider = models.ForeignKey(FilamentProvider, on_delete=models.CASCADE)
     quantity = models.FloatField()  # En kg
-    date = models.DateField()
+    date = models.DateField(default=timezone.now())
 
 
 # Ready to print GCODE Model
 
 class Gcode(models.Model):
-    print_file = models.FileField()
+    print_file = models.FileField(upload_to='gcode/')
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
 
 
@@ -355,7 +356,6 @@ def create_octoprint_state(sender, instance, created, **kwargs):
 
 class Printer(models.Model):
     name = models.CharField(max_length=200)
-    uuid = models.IntegerField()
     printer_type = models.ForeignKey(PrinterType, on_delete=models.CASCADE)
     connection = models.OneToOneField(OctoprintConnection, related_name='source', on_delete=models.CASCADE)
     status = models.CharField(max_length=20, default='New')
@@ -381,17 +381,8 @@ class PrintJobPiece(models.Model):
     print_job = models.ForeignKey(PrintJob, related_name="print_job_pieces", on_delete=models.CASCADE)
 
 
-class TentativePrintJob(models.Model):
-    print_job = models.ForeignKey(
-        PrintJob, on_delete=models.CASCADE, related_name="print_job")
-    print_order = models.ForeignKey(
-        PrintOrder, on_delete=models.CASCADE, related_name="print_orders")
-    position = models.IntegerField()
-
-
 class UnitPiece(models.Model):
     piece = models.ForeignKey(Piece, related_name='unit_pieces', on_delete=models.CASCADE)
     position = models.IntegerField(null=True, blank=True)
     print_order = models.ForeignKey(PrintOrder, on_delete=models.CASCADE)
-    tentative_pj = models.ForeignKey(TentativePrintJob, null=True, blank=True, on_delete=models.CASCADE)
 

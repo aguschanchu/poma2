@@ -9,7 +9,7 @@ from django.core.files.base import ContentFile
 
 class LayerHeightOptimizer:
     # Factor de calidad. Es el maximo stepover admitido en mm
-    q_factor = 0.4
+    q_factor = 0.2
 
     def __init__(self, mesh, limits_inf, limits_sup, angles, height):
         min_layer_height = 0.05
@@ -139,6 +139,9 @@ class LayerHeightOptimizer:
         canvas = FigureCanvasAgg(f)
         ax = f.add_subplot(111)
         lp = self.layers_profile
-        ax.plot([0]+[lp[i-1]+lp[i] for i in range(1, len(lp))], lp)
+        height = [0]
+        for i in range(0, len(lp)-1):
+            height.append(height[i]+lp[i+1])
+        ax.plot(height, lp)
         canvas.print_png(buf)
         return ContentFile(buf.getvalue())
