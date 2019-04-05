@@ -102,3 +102,27 @@ class GeometryModelAdmin(admin.ModelAdmin):
     geometry_result_ready.boolean = True
     orientation_result_ready.boolean = True
 
+class SliceConfigurationInline(admin.StackedInline):
+    model = SliceConfiguration
+    fields = ('printer', 'material', 'print', 'auto_print_profile', 'auto_support')
+
+
+@admin.register(SliceJob)
+class SliceJobAdmin(admin.ModelAdmin):
+    list_display = ('id', 'created', 'build_time', 'celery_id', 'result_ready')
+    inlines = [SliceConfigurationInline,]
+    actions = ['launch_tasks']
+
+    def result_ready(self, obj):
+        return obj.ready
+
+    result_ready.boolean = True
+
+    def launch_tasks(self, request, queryset):
+        for q in queryset:
+            q.launch_task()
+        self.message_user(request, "{} successfully launched".format(queryset.count()))
+
+    launch_tasks.short_description = "Launch selected tasks"
+
+

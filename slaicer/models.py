@@ -16,7 +16,8 @@ from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError, TimeoutError
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-
+from django.core.exceptions import ValidationError
+from django.forms.models import model_to_dict
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -62,12 +63,33 @@ class PrinterProfile(models.Model):
     # guardamos todos los atributos que no nos interesan aca
     config = JSONField(null=True)
 
+    def __str__(self):
+        return self.name
+
+    def get_dict(self):
+        return {**self.config, **model_to_dict(self,fields=['nozzle_diameter', 'printer_model'])}
+
 
 class MaterialProfile(models.Model):
     material = models.ForeignKey(Material, on_delete=models.CASCADE, null=True)
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
     config = JSONField(null=True)
+
+    def get_dict(self):
+        if self.material is None:
+            return self.config
+        else:
+            return {**self.config,
+                    'bed_temperature': self.material.print_bed_temp,
+                    'temperature': self.material.print_nozzle_temp}
+
+    def __str__(self):
+        if self.material is None:
+            return None
+        else:
+            return self.material.name
+
 
 
 class PrintProfile(models.Model):
@@ -78,6 +100,14 @@ class PrintProfile(models.Model):
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
     config = JSONField(null=True)
+
+    def __str__(self):
+        return self.config_name
+
+    def get_dict(self):
+        return {**self.config, **model_to_dict(self,fields=['layer_height']),
+                 'support_material': int(self.support_material),
+                 'fill_density': '{}%'.format(self.fill_density)}
 
     def get_compatible_printers_condition(self):
         return self.config.get('compatible_printers_condition')
@@ -91,21 +121,6 @@ class PrintProfile(models.Model):
         return len(queryset)
 
 
-
-'''
-SliceConfiguration nuclea las instancias de los modelos anteriores, y se utiliza principalmente para definir los atributos
-que desprenden de este.
-'''
-
-
-class SliceConfiguration(models.Model):
-    printer = models.ForeignKey(PrinterProfile, on_delete=models.CASCADE)
-    material = models.ForeignKey(MaterialProfile, on_delete=models.CASCADE)
-    print = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True)
-
-    @property
-    def print_quality(self):
-        return self.printer.base_quality * self.print.layer_height
 
 
 '''
@@ -128,6 +143,10 @@ class TweakerResult(models.Model):
 
     def ready(self):
         return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+
+    @property
+    def support_needed(self):
+        return True if self.unprintability_factor > 5 else False
 
 
 class GeometryResult(models.Model):
@@ -206,52 +225,80 @@ class GeometryModel(models.Model):
         return False if not hasattr(self, 'geometry') else self.geometry.ready()
 
 
+
+
+'''
+SliceConfiguration nuclea las instancias de los modelos anteriores, y se utiliza principalmente para definir los atributos
+que desprenden de este.
+'''
+
+
+class SliceConfiguration(models.Model):
+    printer = models.ForeignKey(PrinterProfile, on_delete=models.CASCADE)
+    material = models.ForeignKey(MaterialProfile, on_delete=models.CASCADE)
+    print = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True, blank=True)
+    auto_print_profile = models.BooleanField(default=True)
+    auto_support = models.BooleanField(default=True)
+    # Especificacion de perfil
+    job = models.OneToOneField('SliceJob', on_delete=models.CASCADE, null=True, related_name='profile')
+
+    @property
+    def print_quality(self):
+        return self.printer.base_quality * self.print.layer_height
+
+
+@receiver(post_save, sender=SliceConfiguration)
+def slice_configuration_validation(sender, instance, created, **kwargs):
+    if created:
+        if instance.print is None:
+            instance.auto_print_profile = True
+            instance.save()
+
+
 '''
 Trabajo de sliceo. Acepta multiples STLs
  - weight: Peso de la impresion, en kg
  - build_time: Tiempo de impresion, en segundos
 '''
 
-
 class SliceJobManager(models.Manager):
-    def create_object(self, model, profile=None, save_gcode=True):
+    def create_object(self, model):
         pass
 
 
 class SliceJob(models.Model):
-    # Especificacion de perfil
-    profile = models.ForeignKey(SliceConfiguration, on_delete=models.SET_NULL, null=True)
     # Parametros de trabajo
     geometry_models = models.ManyToManyField(GeometryModel)
-    save_gcode = models.BooleanField(default=False)
+    save_gcode = models.BooleanField(default=True)
     created = models.DateTimeField(default=datetime.datetime.now)
-    celery_id = models.CharField(max_length=50)
+    celery_id = models.CharField(max_length=50, null=True, blank=True)
     # TODO: Discretizar errores posibles (SliceJob)
-    error_log = models.CharField(max_length=300, null=True)
+    error_log = models.TextField(null=True, blank=True)
     # Resultados de trabajo
-    weight = models.FloatField(null=True)
-    build_time = models.FloatField(null=True)
-    gcode = models.FileField(upload_to='slaicer/gcode/')
+    weight = models.FloatField(null=True, blank=True)
+    build_time = models.FloatField(null=True, blank=True)
+    gcode = models.FileField(upload_to='slaicer/gcode/', null=True, blank=True)
+    # El perfil se especifica mediante el O2O de SliceConfiguration
 
     @property
     def auto_print_profile(self):
         return True if self.profile.print is None else False
 
+    @property
+    def ready(self):
+        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+
+    def launch_task(self):
+        self.celery_id = tasks.slice_model.s(self.id).apply_async()
+        self.save(update_fields=['celery_id'])
+
+
 @receiver(pre_save, sender=SliceJob)
 def validate_slicejob_on_creation(sender, instance, update_fields, **kwargs):
     # No update_fields were specified, so, probably it's a new instance
     if not update_fields:
-        # Valid print profile specified check
-        if instance.auto_print_profile:
-            for m in instance.geometry_models.all():
-                if not m.orientation_req or m.geometry_req:
-                    m.geometry_req = True
-                    m.orientation_req = True
-                    m.save()
-                    m.create_orientation_result()
-                    m.create_geometry_result()
-
-
+        if not hasattr(instance, 'profile'):
+            raise ValidationError("Profile not specified")
 
 
 
@@ -273,3 +320,10 @@ class AvailableProfile(models.Model):
 
     def convert(self):
         slicer_profiles_helper.convert_available_profile_to_model(self)
+
+
+class LibrariesNotConfigured(Exception):
+   """On exception, please run populate_lib located on slaicer folder"""
+   pass
+
+
