@@ -1,16 +1,22 @@
 from django.contrib import admin
 from .models import *
 from django.utils.html import format_html_join, format_html
-
+from django.contrib.postgres.fields import JSONField
+from prettyjson import PrettyJSONWidget
 
 @admin.register(PrinterProfile)
 class PrinterProfileAdmin(admin.ModelAdmin):
     list_display = ('name', 'base_quality', 'config_file')
-
+    formfield_overrides = {
+        JSONField: {'widget': PrettyJSONWidget(attrs={'initial': 'parsed'})}
+    }
 
 @admin.register(MaterialProfile)
 class MaterialProfileAdmin(admin.ModelAdmin):
     list_display = ('config_name', 'material', 'config_file', 'valid_profile')
+    formfield_overrides = {
+        JSONField: {'widget': PrettyJSONWidget(attrs={'initial': 'parsed'})}
+    }
 
     def valid_profile(self, obj):
         return False if obj.material is None else True
@@ -20,7 +26,19 @@ class MaterialProfileAdmin(admin.ModelAdmin):
 @admin.register(PrintProfile)
 class PrintProfileAdmin(admin.ModelAdmin):
     list_display = ('config_name', 'layer_height', 'fill_density', 'config_file')
+    formfield_overrides = {
+        JSONField: {'widget': PrettyJSONWidget(attrs={'initial': 'parsed'})}
+    }
 
+    actions = ['refresh_compatible_printers']
+
+    def refresh_compatible_printers(self, request, queryset):
+        for q in queryset:
+            q.clear_compatible_printers()
+            q.add_compatible_printers()
+        self.message_user(request, "{} successfully refreshed".format(queryset.count()))
+
+    refresh_compatible_printers.short_description = "Refresh compatible printers"
 
 @admin.register(ConfigurationFile)
 class ConfigurationFileAdmin(admin.ModelAdmin):

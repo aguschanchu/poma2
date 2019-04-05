@@ -14,6 +14,9 @@ from celery.result import AsyncResult
 from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError, TimeoutError
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -51,6 +54,8 @@ class ConfigurationFile(models.Model):
 class PrinterProfile(models.Model):
     name = models.CharField(max_length=300)
     base_quality = models.FloatField(default=1)
+    nozzle_diameter = models.FloatField(default=0.4)
+    printer_model = models.CharField(max_length=200)
     # config_name es el nombre que se utiliza en la configuracion referenciada
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
@@ -69,9 +74,22 @@ class PrintProfile(models.Model):
     layer_height = models.FloatField()
     fill_density = models.IntegerField(validators=[MaxValueValidator(100), MinValueValidator(0)])
     support_material = models.NullBooleanField()
+    compatible_printers_condition = models.ManyToManyField(PrinterProfile, related_name='available_print_profiles')
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
     config = JSONField(null=True)
+
+    def get_compatible_printers_condition(self):
+        return self.config.get('compatible_printers_condition')
+
+    def clear_compatible_printers(self):
+        self.compatible_printers_condition.clear()
+
+    def add_compatible_printers(self):
+        queryset = slicer_profiles_helper.get_compatible_printers_condition(self)
+        self.compatible_printers_condition.add(*queryset)
+        return len(queryset)
+
 
 
 '''
@@ -81,8 +99,8 @@ que desprenden de este.
 
 
 class SliceConfiguration(models.Model):
-    printer = models.ForeignKey(PrinterProfile, on_delete=models.SET_NULL)
-    material = models.ForeignKey(MaterialProfile, on_delete=models.SET_NULL)
+    printer = models.ForeignKey(PrinterProfile, on_delete=models.CASCADE)
+    material = models.ForeignKey(MaterialProfile, on_delete=models.CASCADE)
     print = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True)
 
     @property
@@ -214,6 +232,27 @@ class SliceJob(models.Model):
     weight = models.FloatField(null=True)
     build_time = models.FloatField(null=True)
     gcode = models.FileField(upload_to='slaicer/gcode/')
+
+    @property
+    def auto_print_profile(self):
+        return True if self.profile.print is None else False
+
+@receiver(pre_save, sender=SliceJob)
+def validate_slicejob_on_creation(sender, instance, update_fields, **kwargs):
+    # No update_fields were specified, so, probably it's a new instance
+    if not update_fields:
+        # Valid print profile specified check
+        if instance.auto_print_profile:
+            for m in instance.geometry_models.all():
+                if not m.orientation_req or m.geometry_req:
+                    m.geometry_req = True
+                    m.orientation_req = True
+                    m.save()
+                    m.create_orientation_result()
+                    m.create_geometry_result()
+
+
+
 
 
 '''

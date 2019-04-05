@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'django_celery_beat',
     'django.contrib.sites',
+    'prettyjson',
 ]
 
 MIDDLEWARE = [

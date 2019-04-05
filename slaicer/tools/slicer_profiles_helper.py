@@ -73,6 +73,24 @@ def get_full_configuration(conf, category: str) -> dict:
     return perfil
 
 
+# Actualizamos los perfiles de impresion de cada PrintProfile basado en la compatibilidad especificada en el ini
+def get_compatible_printers_condition(print_profile):
+    conditions = print_profile.get_compatible_printers_condition().split(' and ')
+    filtered_conditions = {}
+    for condition in conditions:
+        s = re.search(re.escape('printer_notes=~/.*')+'(.*)'+re.escape('.*/'), condition)
+        if s is not None:
+            s = s.group(1)
+            # Is a printer model condition?
+            if 'PRINTER_MODEL' in s:
+                filtered_conditions['printer_model'] = s.split('PRINTER_MODEL_')[1]
+        # Is a nozzle diameter condition?
+        elif 'nozzle_diameter' in condition:
+            filtered_conditions['nozzle_diameter'] = float(condition.split('nozzle_diameter[0]==')[1])
+    PrinterProfile = apps.get_model('slaicer.PrinterProfile')
+    return PrinterProfile.objects.filter(**filtered_conditions)
+
+
 # Creamos el modelo PrinterProfile, a partir de un archivo de configuracion y una categoria (config_name)
 def import_printer_profile(conf, category: str):
     cat_config = get_full_configuration(conf, 'printer:' + category)
@@ -87,6 +105,8 @@ def import_printer_profile(conf, category: str):
     # Este campo es medio raro porque hay que acceder a otra seccion.
     p.name = cat_config.pop('name') if 'name' in cat_config.keys() else cat_config['printer_model']
     p.base_quality = cat_config.pop('base_quality') if 'base_quality' in cat_config.keys() else 1
+    p.nozzle_diameter = cat_config.pop('nozzle_diameter') if 'nozzle_diameter' in cat_config.keys() else 0.4
+    p.printer_model = cat_config.pop('printer_model')
     p.config = cat_config
     p.save()
     return p
@@ -107,6 +127,7 @@ def import_print_profile(conf, category: str):
     p.support_material = cat_config.pop('support_material') == '1' if 'support_material' in cat_config.keys() else 0
     p.config = cat_config
     p.save()
+    p.add_compatible_printers()
     return p
 
 # Idem anterior material
@@ -158,5 +179,4 @@ def import_available_profiles(conf):
         for name in profiles_availables[profile_type]:
             p = AvailableProfile.objects.get_or_create(profile_type=profile_type, config_name=name, config_file=conf)[0]
             p.save()
-
 
