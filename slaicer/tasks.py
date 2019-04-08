@@ -104,6 +104,9 @@ def slice_model(slicejob_id):
         euler_angles = trimesh.transformations.euler_from_matrix(np.array(obj.orientation.rotation_matrix), 'rxyz')
         rotation_matrix = trimesh.transformations.euler_matrix(*euler_angles, 'rxyz')
         mesh.apply_transform(rotation_matrix)
+        # Do we need to rescale the model?
+        if obj.scale != 1.0:
+            mesh.apply_transform(trimesh.transformations.scale_matrix(obj.scale, [0, 0, 0]))
         # Save rotated model
         rand_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
         path = os.path.join(settings.BASE_DIR, 'tmp', rand_str + '.stl')
@@ -141,7 +144,7 @@ def slice_model(slicejob_id):
     slic3r_bin_dir = os.path.join(settings.BASE_DIR, 'slaicer/lib/Slic3r/slic3r.pl')
     if not os.path.exists(slic3r_bin_dir):
         raise modelos.LibrariesNotConfigured
-    print([slic3r_bin_dir, '--load', ini_path, '-o', output_path, *models_path])
+    print([slic3r_bin_dir, '--load', ini_path, '-m', '-o', output_path, *models_path])
     proc = subprocess.run([slic3r_bin_dir, '--load', ini_path, '-o', output_path, *models_path],
                           universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     for line in proc.stdout.splitlines():
