@@ -1,6 +1,5 @@
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
-from skynet.models import Material
 import datetime
 from django.contrib.postgres.fields import JSONField, ArrayField
 from django.contrib.sites.models import Site
@@ -67,29 +66,23 @@ class PrinterProfile(models.Model):
         return self.name
 
     def get_dict(self):
-        return {**self.config, **model_to_dict(self,fields=['nozzle_diameter', 'printer_model'])}
+        return {**self.config, **model_to_dict(self, fields=['nozzle_diameter', 'printer_model'])}
 
 
 class MaterialProfile(models.Model):
-    material = models.ForeignKey(Material, on_delete=models.CASCADE, null=True)
+    bed_temperature = models.FloatField()
+    nozzle_temperature = models.FloatField()
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
     config = JSONField(null=True)
 
-    def get_dict(self):
-        if self.material is None:
-            return self.config
-        else:
-            return {**self.config,
-                    'bed_temperature': self.material.print_bed_temp,
-                    'temperature': self.material.print_nozzle_temp}
-
     def __str__(self):
-        if self.material is None:
-            return None
-        else:
-            return self.material.name
+        return self.config_name
 
+    def get_dict(self):
+        return {**self.config,
+                'bed_temperature': self.bed_temperature,
+                'temperature': self.nozzle_temperature}
 
 
 class PrintProfile(models.Model):
@@ -240,19 +233,28 @@ class SliceConfiguration(models.Model):
     auto_print_profile = models.BooleanField(default=True)
     auto_support = models.BooleanField(default=True)
     # Especificacion de perfil
-    job = models.OneToOneField('SliceJob', on_delete=models.CASCADE, null=True, related_name='profile')
+    job = models.OneToOneField('SliceJob', on_delete=models.CASCADE, null=True, related_name='profile', blank=True)
+    # Se usa esta configuracion para cotizar
+    quoting_profile = models.BooleanField(default=False)
 
     @property
     def print_quality(self):
         return self.printer.base_quality * self.print.layer_height
 
+@receiver(pre_save, sender=SliceConfiguration)
+def validate_slice_config_presave(sender, instance, update_fields, **kwargs):
+    # Only one quoting_profile can be active
+    if SliceConfiguration.objects.filter(quoting_profile=True).exists() and instance.quoting_profile:
+        SliceConfiguration.objects.update(quoting_profile=False)
 
 @receiver(post_save, sender=SliceConfiguration)
-def slice_configuration_validation(sender, instance, created, **kwargs):
+def validate_slice_config_postsave(sender, instance, created, **kwargs):
     if created:
+        # Auto_print profile flag. We use it to check if we chosen the profile automatically, or not
         if instance.print is None:
             instance.auto_print_profile = True
             instance.save()
+
 
 
 '''
@@ -262,14 +264,28 @@ Trabajo de sliceo. Acepta multiples STLs
 '''
 
 class SliceJobManager(models.Manager):
-    def create_object(self, model):
-        pass
+    def quote_object(self, model):
+        # It's a quoting slicejob? We specify the quoting profile
+        if not SliceConfiguration.objects.filter(quoting_profile=True).exists():
+            raise ValidationError("Quoting profile incorrectly configured. Please set one")
+        quoting_profile = SliceConfiguration.objects.filter(quoting_profile=True).first()
+        profile = SliceConfiguration.objects.create(printer=quoting_profile.printer,
+                                                    material=quoting_profile.material,
+                                                    print=quoting_profile.print,
+                                                    auto_print_profile=quoting_profile.auto_print_profile,
+                                                    auto_support=quoting_profile.auto_support)
+        o = self.create(quote=True)
+        o.geometry_models.add(model)
+        profile.job = o
+        profile.save()
+        o.launch_task()
+        return o
 
 
 class SliceJob(models.Model):
     # Parametros de trabajo
     geometry_models = models.ManyToManyField(GeometryModel)
-    save_gcode = models.BooleanField(default=True)
+    save_gcode = models.BooleanField(default=False)
     created = models.DateTimeField(default=datetime.datetime.now)
     celery_id = models.CharField(max_length=50, null=True, blank=True)
     # TODO: Discretizar errores posibles (SliceJob)
@@ -279,27 +295,23 @@ class SliceJob(models.Model):
     build_time = models.FloatField(null=True, blank=True)
     gcode = models.FileField(upload_to='slaicer/gcode/', null=True, blank=True)
     # El perfil se especifica mediante el O2O de SliceConfiguration
+    # TODO: Tener en cuenta bed_shape al slicear en quote
+    quote = models.BooleanField(default=False)
+
+    objects = SliceJobManager()
 
     @property
     def auto_print_profile(self):
         return True if self.profile.print is None else False
 
-    @property
     def ready(self):
         return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
 
     def launch_task(self):
+        if not hasattr(self, 'profile'):
+            raise ValidationError("Profile not specified")
         self.celery_id = tasks.slice_model.s(self.id).apply_async()
         self.save(update_fields=['celery_id'])
-
-
-@receiver(pre_save, sender=SliceJob)
-def validate_slicejob_on_creation(sender, instance, update_fields, **kwargs):
-    # No update_fields were specified, so, probably it's a new instance
-    if not update_fields:
-        if not hasattr(instance, 'profile'):
-            raise ValidationError("Profile not specified")
-
 
 
 '''

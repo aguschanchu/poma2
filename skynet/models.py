@@ -16,7 +16,13 @@ from django.core.files import File
 import random, string
 import traceback
 from django_celery_beat.models import PeriodicTask, IntervalSchedule
+from datetime import timedelta
+from slaicer.models import *
+from skynet.tasks import quote_gcode
 
+'''
+Materials and colors model definition
+'''
 
 # Color Model
 class Color(models.Model):
@@ -32,19 +38,18 @@ class Color(models.Model):
 
 class Material(models.Model):
     name = models.CharField(max_length=200)
-    sku = models.CharField(max_length=200, unique=True)
-    print_bed_temp = models.IntegerField()
-    print_nozzle_temp = models.IntegerField()
+    density = models.FloatField(blank=True, null=True)
+    profile = models.ForeignKey('slaicer.MaterialProfile', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
+
 
 
 # Filament Provider Model
 
 class FilamentProvider(models.Model):
     name = models.CharField(max_length=200)
-    sku = models.CharField(max_length=200, unique=True)
     telephone = models.CharField(max_length=200)
     email = models.EmailField()
 
@@ -56,7 +61,6 @@ class FilamentProvider(models.Model):
 
 class MaterialBrand(models.Model):
     name = models.CharField(max_length=200)
-    slug = models.CharField(max_length=200)
     providers = models.ManyToManyField(FilamentProvider, blank=True)
 
     def __str__(self):
@@ -71,13 +75,18 @@ class Filament(models.Model):
     brand = models.ForeignKey(MaterialBrand, on_delete=models.CASCADE)
     color = models.ForeignKey(Color, on_delete=models.CASCADE)
     material = models.ForeignKey(Material, on_delete=models.CASCADE)
-    print_bed_temp = models.IntegerField(blank=True)
-    print_nozzle_temp = models.IntegerField(blank=True)
+    bed_temperature = models.IntegerField(blank=True, null=True)
+    nozzle_temperature = models.IntegerField(blank=True, null=True)
     price_per_kg = models.IntegerField(null=True, blank=True)
-    density = models.FloatField(blank=True, null=True)
 
     def __str__(self):
         return self.name
+
+    def get_bed_temperature(self):
+        return self.bed_temperature if self.bed_temperature is not None else self.material.profile.bed_temperature
+
+    def get_nozzle_temperature(self):
+        return self.nozzle_temperature if self.bed_temperature is not None else self.material.profile.nozzle_temperature
 
 
 # Filament Purchase Model
@@ -86,77 +95,9 @@ class FilamentPurchase(models.Model):
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
     provider = models.ForeignKey(FilamentProvider, on_delete=models.CASCADE)
     quantity = models.FloatField()  # En kg
-    date = models.DateField(default=timezone.now())
+    date = models.DateField(default=timezone.now)
 
 
-# Ready to print GCODE Model
-
-class Gcode(models.Model):
-    print_file = models.FileField(upload_to='gcode/')
-    filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
-
-
-# Order Models
-
-class Order(models.Model):
-    client = models.CharField(max_length=200)
-    order_number = models.IntegerField()
-    due_date = models.DateField()
-    priority = models.IntegerField()
-
-
-# Piece Quality Model
-
-class PrintSettings(models.Model):
-    name = models.CharField(max_length=200)
-    config_file = models.FileField()
-
-    def __str__(self):
-        return self.name
-
-
-# Piece Model
-
-class Piece(models.Model):
-
-    # TODO Define all possible states for a piece
-
-    # Hacer otra clase Object que contenga muchas piezas y lleve cuenta de la cantidad impresa, referencia a la orden, etc?
-    order = models.ForeignKey(
-        Order, on_delete=models.CASCADE, related_name='pieces')
-    scale = models.FloatField(default=1.0)
-    print_settings = models.ForeignKey(PrintSettings, on_delete=models.CASCADE, blank=True, null=True)
-    copies = models.IntegerField(default=1)
-    completed = models.IntegerField(default=0)
-    stl = models.FileField(blank=True, null=True)
-    gcode = models.ForeignKey(
-        Gcode, on_delete=models.CASCADE, blank=True, null=True)
-    filaments = models.ManyToManyField(Filament)
-    status = models.CharField(max_length=200)
-    weight = models.FloatField(null=True, blank=True)
-    time = models.DurationField(null=True, blank=True)
-
-
-class Scenario(models.Model):
-    uuid = models.IntegerField(default=0)
-
-
-class PrintOrder(models.Model):
-    scenario = models.ForeignKey(
-        Scenario, on_delete=models.CASCADE, related_name="print_orders")
-
-
-# Printer Type Model
-
-class PrinterType(models.Model):
-    name = models.CharField(max_length=200)
-    uuid = models.IntegerField()
-    size_x = models.IntegerField()
-    size_y = models.IntegerField()
-    size_z = models.IntegerField()
-
-    def __str__(self):
-        return self.name
 
 '''
 OctoprintConnection handles API endpoints with octoprint
@@ -206,6 +147,18 @@ class OctoprintTask(models.Model):
             return False
         else:
             return AsyncResult(self.celery_id).ready()
+
+    @property
+    def awaiting_for_human_intervention(self):
+        if hasattr(self, 'filament_change'):
+            return not self.filament_change.confirmed
+        if hasattr(self, 'print_job'):
+            return self.print_job.awaiting_for_bed_removal
+
+class FilamentChange(models.Model):
+    new_filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
+    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='filament_change')
+    confirmed = models.BooleanField(default=False)
 
 
 class OctoprintJobStatus(models.Model):
@@ -352,11 +305,15 @@ def create_octoprint_state(sender, instance, created, **kwargs):
                                     task='skynet.tasks.update_octoprint_status',
                                     kwargs=json.dumps({'conn_id': instance.id}))
 
-# Printer Model
 
+'''
+Printers models definitions
+'''
+
+# Printer Model
 class Printer(models.Model):
     name = models.CharField(max_length=200)
-    printer_type = models.ForeignKey(PrinterType, on_delete=models.CASCADE)
+    printer_type = models.ForeignKey('slaicer.PrinterProfile', on_delete=models.CASCADE)
     connection = models.OneToOneField(OctoprintConnection, related_name='source', on_delete=models.CASCADE)
     status = models.CharField(max_length=20, default='New')
     remaining_time = models.DurationField(default=0)
@@ -365,24 +322,140 @@ class Printer(models.Model):
     def __str__(self):
         return self.name
 
-
-# PrintJob Model
-class PrintJob(models.Model):
-    printer = models.ForeignKey(Printer, on_delete=models.CASCADE)
-    status = models.CharField(max_length=50)
-    start_time = models.DateTimeField(null=True, blank=True)
-    end_time = models.DateTimeField(null=True, blank=True)
-    estimated_time = models.DurationField(null=True, blank=True)
+'''
+Orders models definitions
+'''
 
 
-class PrintJobPiece(models.Model):
-    piece = models.ForeignKey(Piece, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
-    print_job = models.ForeignKey(PrintJob, related_name="print_job_pieces", on_delete=models.CASCADE)
+# Ready to print GCODE Model
+
+class Gcode(models.Model):
+    print_file = models.FileField(upload_to='gcode/')
+    printer_type = models.ForeignKey('slaicer.PrinterProfile', on_delete=models.SET_NULL, null=True)
+    material = models.ForeignKey(Material, on_delete=models.SET_NULL, null=True)
+    build_time = models.FloatField(default=None, blank=True, null=True)
+    weight = models.FloatField(default=None, blank=True, null=True)
+    celery_id = models.CharField(max_length=200, null=True, blank=True)
+
+    def ready(self):
+        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+
+
+# Order Models
+def order_default_due_date():
+    return timezone.now() + timedelta(days=4)
+
+class Order(models.Model):
+    client = models.CharField(max_length=200)
+    due_date = models.DateField(default=order_default_due_date)
+    priority = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(5)], default=3)
+
+
+# Piece Model
+
+class Piece(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='pieces')
+    # If it's none, they will be calculated automatically
+    print_settings = models.ForeignKey('slaicer.PrintProfile', on_delete=models.SET_NULL, blank=True, null=True)
+    copies = models.IntegerField(default=1)
+    scale = models.FloatField(default=1.0)
+    material = models.ForeignKey(Material, on_delete=models.SET_NULL, null=True)
+    color = models.ForeignKey(Color, on_delete=models.CASCADE)
+    # Used to mark the piece as canceled
+    cancelled = models.BooleanField(default=False)
+    # You need to specify a model or a Gcode (but not both). The field is called stl for historical reasons, but it supports obj too
+    stl = models.ForeignKey(GeometryModel, on_delete=models.CASCADE, null=True, blank=True)
+    gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
+    # Slaicer models reference
+    quote = models.ForeignKey(SliceJob, on_delete=models.CASCADE, null=True, blank=True)
+
+    @property
+    def completed_pieces(self):
+        return self.unit_pieces.filter(success=True).count()
+
+    @property
+    def pending_pieces(self):
+        return self.unit_pieces.filter(pending=True).count()
+
+    @property
+    def queued_pieces(self):
+        return self.copies - self.completed_pieces - self.pending_pieces
+
+    def quote_ready(self):
+        if self.stl is not None:
+            return self.quote.ready()
+        elif self.gcode is not None:
+            return self.gcode.ready()
+
+    def get_build_time(self):
+        if not self.quote_ready():
+            return None
+        if self.stl is not None:
+            return self.quote.build_time
+        else:
+            return self.gcode.build_time
+
+    def get_weight(self):
+        if not self.quote_ready():
+            return None
+        if self.stl is not None:
+            return self.quote.weight
+        else:
+            return self.gcode.weight
+
+
+@receiver(pre_save, sender=Piece)
+def validate_piece(sender, instance, update_fields, **kwargs):
+    # We need an STL or a Gcode, but not both
+    if (instance.stl is None and instance.gcode is None) or (instance.stl is not None and instance.gcode is not None):
+        raise ValidationError("Please set piece gcode OR stl")
+
+
+@receiver(post_save, sender=Piece)
+def launch_piece_quoting_tasks(sender, instance, created, **kwargs):
+    # We start quoting tasks
+    if created:
+        if instance.stl is not None:
+            instance.stl.create_orientation_result()
+            instance.stl.create_geometry_result()
+            instance.quote = SliceJob.objects.quote_object(instance.stl)
+            instance.save(update_fields=['quote'])
+        if instance.gcode is not None:
+            instance.gcode.celery_id = quote_gcode.s(instance.id).apply_async()
+            instance.gcode.save(update_fields=['celery_id'])
 
 
 class UnitPiece(models.Model):
-    piece = models.ForeignKey(Piece, related_name='unit_pieces', on_delete=models.CASCADE)
-    position = models.IntegerField(null=True, blank=True)
-    print_order = models.ForeignKey(PrintOrder, on_delete=models.CASCADE)
+    piece = models.ForeignKey(Piece, on_delete=models.CASCADE, related_name='unit_pieces')
+    job = models.ForeignKey('PrintJob', on_delete=models.CASCADE, related_name='unit_pieces')
+
+    @property
+    def pending(self):
+        return self.job.pending
+
+    @property
+    def success(self):
+        return self.job.success
+
+
+# PrintJob Model
+
+class PrintJob(models.Model):
+    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='print_job')
+    gcode = models.FileField(upload_to='gcode/')
+    success = models.NullBooleanField()
+    created = models.DateTimeField(default=timezone.now)
+    end_time = models.DateTimeField(null=True)
+
+    @property
+    def printing(self):
+        return not self.task.ready
+
+    @property
+    def awaiting_for_bed_removal(self):
+        return not self.priting and self.success is None
+
+    @property
+    def pending(self):
+        return self.printing or self.awaiting_for_bed_removal
 

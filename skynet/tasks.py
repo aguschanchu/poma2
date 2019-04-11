@@ -1,168 +1,63 @@
 # Various tasks for PoMa 2
 from __future__ import absolute_import, unicode_literals
 from celery import shared_task, group
-from .models import *
+import skynet.models as skynet_models
 from datetime import datetime, timedelta
 from math import pi
+import os
+import subprocess
+from slaicer.tasks import parse_build_time
+from django.conf import settings
+import traceback
 
-def quote_order(order):
-    """ 
-    Funtion that quotes each piece of the order.
+@shared_task(queue='celery')
+def quote_gcode(piece_id):
     """
-    # Get all pieces of an order
-    pieces = order.pieces.all()
-
-    # Quote them one by one
-    for piece in pieces:
-        quote_piece(piece)
-
-    order.status = "101"  # FIXME Define possible states of order
-    order.save()
-
-    return
-
-
-def quote_piece(piece):
+    Quotes a single gcode to obtain the estimated printing time and weight.
     """
-    Quotes a single piece to obtain the estimated printing time and weight.
-    """
+    piece = skynet_models.Piece.objects.get(id=piece_id)
+    # Reads printing time from gcode file.
+    filename = os.path.join(settings.BASE_DIR, piece.gcode.print_file.path)
 
-    # If the piece contains an stl file then it has to be sent to the slAIcer API
-    if piece.stl:
+    supported_slicers = {'Slic3r': slicer_parser,
+                         'Simplify3D': simplify_parser,
+                         'Cura': cura_parser}
 
-        # Create data and files dictionaries
-        data = {'material': piece.filament.material.name,
-                'calidad': piece.quality,
-                'prioridad': piece.priority,
-                'escala': piece.scale,
-                # 'slicer_args': piece.slicer_args,
-                }
-        files = {'file': open(settings.BASE_DIR + piece.stl.url, 'rb')}
+    # TODO Implement this for other Slicing programs (Slimpify3D, Cura, etc)
+    # Determine which Slicing program was used.
+    head = subprocess.check_output("head -5 "+filename, shell=True).decode("utf-8").split("\n")
+    for slicing_program in supported_slicers.keys():
+        if any([slicing_program in line for line in head]):
+            try:
+                time, length = supported_slicers[slicing_program](filename)
+            except:
+                traceback.print_exc()
+                time, length = timedelta(hours=20), 0
+            radius = (1.75 / 2) / 10  # in cm
+            density = piece.material.density
+            weight_g = radius ** 2 * pi * length * density  # in g
+            weight_kg = weight_g / 1000  # in kg
 
-        # Tries to connect with the SlAIcer API and qoute the piece
-        try:
-            r = requests.post(settings.SLICERAPI, files=files, data=data)
-            slicer_id = r.json()['id']
-            for _ in range(0, 30):
-                r = requests.get(settings.SLICERAPI + f'status/{slicer_id}/')
-                if r.json()['estado'] == '200':
-                    # If slicejob finished succesfully just get all the data
-                    # Estimated printint time
-                    piece.time = timedelta(seconds=r.json()['tiempo_estimado'])
-                    # TODO Determine if we need to save size of piece
-                    # piece.size_x = r.json()['size_x']
-                    # piece.size_y = r.json()['size_y']
-                    # piece.size_z = r.json()['size_z']
-
-                    # TODO Check if object enters in one of the available printers
-                    # impresoras = Impresora.objects.all()
-                    # fits = True
-                    # for imp in impresoras:
-                    #     if piece.size_x <= imp.tam_x and piece.size_y <= imp.tam_y and piece.size_z <= imp.tam_z:
-                    #         fits = True
-                    #         break
-                    # if fits:
-                    #     piece.estado = '101'
-                    # else:
-                    #     piece.estado = '304'
-                    # break
-
-                # TODO Error Management if there is a problem with the slicing.
-                # elif r.json()['estado'] in ('303', '304', '305'):
-                #     # Si hubo un error al slicear cambia el estado del piece
-                #     piece.estado = r.json()['estado']
-                #     piece.save()
-                #     return False
-                # elif r.json()['estado'] in ('301', '302', '306'):
-                #     # Estos son errores de slicero no relevantes al piece en si
-                #     piece.estado = '301'
-                #     piece.save()
-                #     return False
-
-                time.sleep(1)
-
-            piece.save()  # Guarda los datos en la DB
+            piece.gcode.build_time = time.total_seconds()
+            piece.gcode.weight = weight_g
+            print(time.total_seconds(), weight_g)
+            piece.gcode.save(update_fields=['build_time', 'weight'])
             return True
-        except:
-            pass
-
-    # If the piece conatins a gcode file, then it has to be parsed to find the
-    # estimated printing time
-    if piece.gcode:
-        # Reads printing time from gcode file.
-        filename = settings.BASE_DIR + piece.gcode.print_file.url
-
-        supported_slicers = [("Slic3r", slicer_parser),
-                             ("Simplify3D", simplify_parser),
-                             ("Cura", cura_parser)]
-        # TODO Implement this for other Slicing programs (Slimpify3D, Cura, etc)
-        # Determine which Slicing program was used.
-        slicer = ""
-        head = subprocess.check_output(
-            "head -5 "+filename, shell=True).decode("utf-8").split("\n")
-        for slicing_program in supported_slicers:
-            if (slicing_program[0] in head[0]) or (slicing_program[0] in head[4]):
-                try:
-                    time, length = slicing_program[1](filename)
-
-                    # Calculate weight from length
-                    radius = (piece.filament.diameter / 2) / 10  # in cm
-                    density = piece.filament.density  # in g/cm^3
-                    weight_g = radius**2 * pi * length * density  # in g
-                    weight_kg = weight_g / 1000  # in kg
-
-                    piece.time = time
-                    piece.weight = weight_kg
-                    piece.status = "101"  # FIXME Check if this state still holds
-                    piece.save()
-                    return True
-                except:
-                    break
-
-        # If it reaches this point, something failed in finding the printing time
-        # Set printing time to default for now..
-        # TODO consider asking the user to input it manually or leaving the default
-
-        piece.time = timedelta(hours=20)  # Default printing time
-        piece.weight = 0.2  # Default weight
-        piece.status = "101"  # In queue status
-        piece.save()
-        return True
 
 
-def slicer_parser(print_file):
+def slicer_parser(filename):
     """ Parser that reads the estimated printing time for gcodes that were
     sliced with Slic3r. """
     # Find last lines of the file
-    lines = subprocess.check_output(
-        "tail -350 "+filename, shell=True).decode("utf-8").split("\n")
-    time_str = ""
-    length_str = ""
-    # Search for line that contains the printing time
+    lines = subprocess.check_output("tail -500 "+filename, shell=True).decode("utf-8").split("\n")
+
     for line in lines:
+        if 'estimated printing time (normal mode)' in line:
+            seconds = parse_build_time(line)
         if "filament used" in line:
             length_str = line.split(" = ")[1]
-        if "estimated printing time" in line:
-            time_str = line.split(" = ")[1]
-            break
 
-    # Tries if it lasts more than an hour
-    if "h" in time_str:
-        hours = int(time_str.split("h ")[0])
-        minutes = int(time_str.split("h ")[1].split("m ")[0])
-        seconds = int(time_str.split("h ")[1].split("m ")[1].split("s")[0])
-    else:
-        hours = 0
-        # Less than an hour but more than a minute
-        if "m" in time_str:
-            minutes = int(time_str.split("m ")[0])
-            seconds = int(time_str.split("m ")[1].split("s")[0])
-        # And less than a minute
-        else:
-            minutes = 0
-            seconds = int(time_str.split("s")[0])
-
-    dt = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+    dt = timedelta(seconds=seconds)
 
     # Get length
     length = float(length_str.split("mm")[0]) / 10  # in cm
@@ -170,7 +65,7 @@ def slicer_parser(print_file):
     return dt, length
 
 
-def simplify_parser(print_file):
+def simplify_parser(filename):
     """ Parser that reads the estimated printing time for gcodes that were
     sliced with Simplify3D. """
 
@@ -189,25 +84,26 @@ def simplify_parser(print_file):
             length_str = line.split(": ")[1]
 
     # Parse the printing time
-    if "hour" in time_str:
-        # Piece takes more than a hour to print
-        try:
-            # Piece takes more than 2 hours, hence the "hours" plural
-            time_split = time_str.split(" hours ")
-        except:
-            # Piece takes less than 2 hours, hence the "hour" singular
-            time_split = time_str.split(" hour ")
-        hours = int(time_split[0])
-        minutes = int(time_split[1].split(" minutes")[0])
-        dt = timedelta(hours=hours, minutes=minutes)
+    if 'hours' in time_str:
+        # Piece takes more than 2 hours, hence the "hours" plural
+        time_split = time_str.split(" hours ")
     else:
-        # Piece takes less than an hour to print
-        try:
-            minutes = int(time_str.split(" minutes")[0])
-            # TODO Test what happends with pieces that take less than a minute
-            dt = timedelta(minutes=minutes)
-        except:
-            pass
+        # Piece takes less than 2 hours, hence the "hour" singular
+        time_split = time_str.split(" hour ")
+    hours = int(time_split[0]) if len(time_split) > 1 else 0
+    print(time_split)
+    time_str = time_split[1] if len(time_split) > 1 else time_split[0]
+    print(time_str)
+    # Same with minutes
+    if 'minutes' in time_str:
+        # Piece takes more than 2 hours, hence the "hours" plural
+        time_split = time_str.split(" minutes")
+    else:
+        # Piece takes less than 2 hours, hence the "hour" singular
+        time_split = time_str.split(" minute")
+    minutes = int(time_split[0]) if len(time_split) > 1 else 0
+    dt = timedelta(hours=hours, minutes=minutes)
+
 
     # Parse weight of the piece
     try:
@@ -218,7 +114,7 @@ def simplify_parser(print_file):
     return dt, length
 
 
-def cura_parser(print_file):
+def cura_parser(filename):
     """ Parser that reads the estimated printing time for gcodes that were
     sliced with Cura. """
 
@@ -245,28 +141,10 @@ def cura_parser(print_file):
     return dt, length
 
 
-def create_printjob(pieces, printer):
-    """ 
-    Create a PrintJob object with a list of pieces supplied by the plan generator.
-
-    If the piece is a gcode it has to check that only one piece is in the list.
-
-    If it's a list of stl pieces, all have to be sliced together and request a
-    gcode.
-    """
-    pass
-
-
-def change_filament(printjob):
-    """
-    Recieves
-    """
-    pass
-
-
 '''
 OctoprintConnection Celery tasks
 '''
+
 class PrintNotFinished(Exception):
    """Print not finished exception, used for celery autoretry"""
    pass
@@ -279,7 +157,7 @@ def send_octoprint_task(task_id):
     exception, until the print finishes. Please don't send printjobs using this task. Instead, use OctoprintTask
     object manager
     """
-    task = OctoprintTask.objects.get(pk=task_id)
+    task = skynet_models.OctoprintTask.objects.get(pk=task_id)
     # type: command
     if task.type == 'command':
         task.job_sent = True
@@ -306,7 +184,7 @@ def send_octoprint_task(task_id):
 
 @shared_task(queue='celery')
 def update_octoprint_status(conn_id):
-    connection = OctoprintConnection.objects.get(pk=conn_id)
+    connection = skynet_models.OctoprintConnection.objects.get(pk=conn_id)
     connection.update_status()
 
 
@@ -315,10 +193,10 @@ def octoprint_task_dispatcher():
     """
     Checks for pending OctoprintTasks on each connection, and starts the task
     """
-    for conn in OctoprintConnection.objects.all():
+    for conn in skynet_models.OctoprintConnection.objects.all():
         # Update current task
         if conn.active_task is not None:
-            if conn.active_task.ready:
+            if conn.active_task.ready and conn.active_task.awaiting_for_human_intervention:
                 # We clear the current task
                 conn.active_task = None
         # Send new task

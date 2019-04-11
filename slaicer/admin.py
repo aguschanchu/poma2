@@ -13,15 +13,11 @@ class PrinterProfileAdmin(admin.ModelAdmin):
 
 @admin.register(MaterialProfile)
 class MaterialProfileAdmin(admin.ModelAdmin):
-    list_display = ('config_name', 'material', 'config_file', 'valid_profile')
+    list_display = ('config_name', 'config_file')
     formfield_overrides = {
         JSONField: {'widget': PrettyJSONWidget(attrs={'initial': 'parsed'})}
     }
 
-    def valid_profile(self, obj):
-        return False if obj.material is None else True
-
-    valid_profile.boolean = True
 
 @admin.register(PrintProfile)
 class PrintProfileAdmin(admin.ModelAdmin):
@@ -114,7 +110,7 @@ class SliceJobAdmin(admin.ModelAdmin):
     actions = ['launch_tasks']
 
     def result_ready(self, obj):
-        return obj.ready
+        return obj.ready()
 
     result_ready.boolean = True
 
@@ -126,3 +122,8 @@ class SliceJobAdmin(admin.ModelAdmin):
     launch_tasks.short_description = "Launch selected tasks"
 
 
+@admin.register(SliceConfiguration)
+class SliceConfigurationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'quoting_profile')
+
+    list_filter = ('quoting_profile',)

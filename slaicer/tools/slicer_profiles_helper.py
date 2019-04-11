@@ -138,6 +138,8 @@ def import_material_profile(conf, category: str):
         p = MaterialProfile.objects.filter(config_name=category, config_file=conf)[0]
     else:
         p = MaterialProfile()
+        p.bed_temperature = cat_config.pop('bed_temperature') if 'bed_temperature' in cat_config.keys() else 55
+        p.nozzle_temperature = cat_config.pop('nozzle_temperature') if 'nozzle_temperature' in cat_config.keys() else 200
         p.config_name = category
         p.config_file = conf
 

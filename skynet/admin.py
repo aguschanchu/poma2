@@ -1,19 +1,18 @@
 from django.contrib import admin
-from skynet.models import Color, Material, FilamentProvider, MaterialBrand, Filament, FilamentPurchase, Order, Piece, OctoprintConnection, OctoprintTask, OctoprintStatus
+from skynet.models import *
 
 # Register your models here.
 
 class ColorAdmin(admin.ModelAdmin):
     list_display = ('name',)
-    fields = ('name',)
 
 class MaterialAdmin(admin.ModelAdmin):
-    list_display = ('name', 'print_bed_temp', 'print_nozzle_temp')
-    fields = ('name', 'print_bed_temp', 'print_nozzle_temp')
+    list_display = ('name', )
 
 class FilamentProviderAdmin(admin.ModelAdmin):
     list_display = ('name', 'telephone')
     fields = ('name', 'telephone')
+
 
 class MaterialBrandAdmin(admin.ModelAdmin):
     list_display = ('name', 'filament_providers')
@@ -31,14 +30,14 @@ class MaterialBrandAdmin(admin.ModelAdmin):
         return "\n".join([p.name for p in obj.providers.all()])
 
 class FilamentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'brand', 'color', 'material', 'print_bed_temp', 'print_nozzle_temp', 'price_per_kg', 'stock')
+    list_display = ('name', 'brand', 'color', 'material', 'bed_temperature', 'nozzle_temperature', 'price_per_kg', 'stock')
     fieldsets = (
         (None, {
             'fields': ('brand', 'color', 'material')
         }),
         ('Advanced options', {
             'classes': ('collapse',),
-            'fields': ('name', 'print_bed_temp', 'print_nozzle_temp', 'density', 'price_per_kg'),
+            'fields': ('name', 'bed_temperature', 'nozzle_temperature', 'density', 'price_per_kg'),
         }),
     )
 
@@ -50,14 +49,17 @@ class FilamentAdmin(admin.ModelAdmin):
 
 
 class PieceAdmin(admin.ModelAdmin):
-    list_display = ('order', 'scale', 'copies', 'completed', 'stl', 'compatible_filaments','status')
+    list_display = ('order', 'scale', 'copies',  'stl', 'build_time', 'weight')
 
-    def compatible_filaments(self, obj):
-        return " - ".join([f"{filament.material.name} {filament.color.name}" for filament in obj.filaments.all()])
+    def build_time(self, obj):
+        return obj.get_build_time()
+
+    def weight(self, obj):
+        return obj.get_weight()
 
 
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('client', 'order_number', 'due_date', 'priority')
+    list_display = ('client', 'due_date', 'priority')
 
 class PrinterAdmin(admin.ModelAdmin):
     list_display = ()
@@ -92,3 +94,7 @@ class OctoprintTaskAdmin(admin.ModelAdmin):
         return obj.ready
 
     ready.boolean = True
+
+@admin.register(Gcode)
+class GcodeAdmin(admin.ModelAdmin):
+    list_display = ('id',)
