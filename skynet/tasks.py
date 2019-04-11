@@ -196,14 +196,19 @@ def octoprint_task_dispatcher():
     for conn in skynet_models.OctoprintConnection.objects.all():
         # Update current task
         if conn.active_task is not None:
-            if conn.active_task.ready and conn.active_task.awaiting_for_human_intervention:
+            if conn.active_task.finished:
+                # Does another task depends on this task? In that case, we should launch that one
+                dep = conn.active_task.dependencies.first() if conn.active_task.dependencies.count() > 0 else None
                 # We clear the current task
                 conn.active_task = None
         # Send new task
         if conn.active_task is None and conn.connection_ready:
             # Do we have pending tasks?
             if conn.tasks.filter(celery_id=None).exists():
-                t = conn.tasks.filter(celery_id=None).first()
+                if 'dep' in locals():
+                    t = dep
+                else:
+                    t = conn.tasks.filter(celery_id=None, dependencies_ready=True).first()
                 # Mark task as active
                 conn.active_task = t
                 conn.save()

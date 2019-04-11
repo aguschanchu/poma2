@@ -19,6 +19,7 @@ from django_celery_beat.models import PeriodicTask, IntervalSchedule
 from datetime import timedelta
 from slaicer.models import *
 from skynet.tasks import quote_gcode
+from django.core.files.base import ContentFile
 
 '''
 Materials and colors model definition
@@ -120,17 +121,38 @@ class OctoprintTaskManager(models.Manager):
         return o
 
 
+class FilamentChangeManager(models.Manager):
+    def issue_change(self, new_filament, connection):
+        o = self.create(new_filament=new_filament)
+        old_filament = connection.printer.filament
+        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n M600".format(bed_temp=max(new_filament.get_bed_temperature(), old_filament.get_bed_temperature()),
+                                                                        nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()))
+        o.task = connection.create_task(file=ContentFile(gcode))
+        o.save()
+        return o
+
+
 class FilamentChange(models.Model):
     new_filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
-    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='filament_change')
+    task = models.OneToOneField('OctoprintTask', on_delete=models.CASCADE, related_name='filament_change', null=True)
     confirmed = models.BooleanField(default=False)
     created = models.DateTimeField(default=timezone.now)
-    confimed_date = models.DateTimeField(null=True)
+    confirmed_date = models.DateTimeField(null=True)
+
+    objects = FilamentChangeManager
 
     @staticmethod
     def filament_change_mean_duration():
         # Time that takes a filament change. The idea es to calculate this automatically, based on previous events
         return 10*60
+
+
+@receiver(pre_save, sender=FilamentChange)
+def update_printer_filament_on_confirmation(sender, instance, update_fields, **kwargs):
+    if instance.confirmed:
+        printer = instance.task.connection.printer
+        printer.filament = instance.new_filament
+        printer.save()
 
 
 class OctoprintTask(models.Model):
@@ -146,6 +168,8 @@ class OctoprintTask(models.Model):
     job_sent = models.BooleanField(default=False)
     job_filename = models.CharField(max_length=300, null=True)
     objects = OctoprintTaskManager()
+    # We support task dependency (something similar to celery chains)
+    dependency = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='dependencies')
 
     @property
     def status(self):
@@ -170,12 +194,20 @@ class OctoprintTask(models.Model):
         return False
 
     @property
+    def finished(self):
+        return self.ready and not self.awaiting_for_human_intervention
+
+    @property
     def time_left(self):
         if hasattr(self, 'filament_change'):
             return FilamentChange.filament_change_mean_duration()
         if hasattr(self, 'print_job'):
             return self.connection.status.job.estimated_print_time_left
         return 0
+
+    @property
+    def dependencies_ready(self):
+        return (self.dependency.dependencies_ready and self.dependency.finished) if self.dependency is not None else True
 
 
 class OctoprintJobStatus(models.Model):
@@ -347,10 +379,8 @@ Printers models definitions
 class Printer(models.Model):
     name = models.CharField(max_length=200)
     printer_type = models.ForeignKey('slaicer.PrinterProfile', on_delete=models.CASCADE)
-    connection = models.OneToOneField(OctoprintConnection, related_name='source', on_delete=models.CASCADE)
-    status = models.CharField(max_length=20, default='New')
-    remaining_time = models.DurationField(default=0)
-    file_name = models.CharField(max_length=100, blank=True)
+    connection = models.OneToOneField(OctoprintConnection, related_name='printer', on_delete=models.CASCADE)
+    filament = models.ForeignKey(Filament, null=True, on_delete=models.SET_NULL)
 
     def __str__(self):
         return self.name
@@ -392,8 +422,8 @@ class Piece(models.Model):
     print_settings = models.ForeignKey('slaicer.PrintProfile', on_delete=models.SET_NULL, blank=True, null=True)
     copies = models.IntegerField(default=1)
     scale = models.FloatField(default=1.0)
-    material = models.ForeignKey(Material, on_delete=models.SET_NULL, null=True)
-    color = models.ForeignKey(Color, on_delete=models.CASCADE)
+    material = models.ManyToManyField(Material)
+    color = models.ManyToManyField(Color)
     # Used to mark the piece as canceled
     cancelled = models.BooleanField(default=False)
     # You need to specify a model or a Gcode (but not both). The field is called stl for historical reasons, but it supports obj too
@@ -442,6 +472,9 @@ def validate_piece(sender, instance, update_fields, **kwargs):
     # We need an STL or a Gcode, but not both
     if (instance.stl is None and instance.gcode is None) or (instance.stl is not None and instance.gcode is not None):
         raise ValidationError("Please set piece gcode OR stl")
+    # We need at least a color and a material
+    if len(instance.color.count()) == 0 or len(instance.material.count()) == 0:
+        raise ValidationError("Please select at least a color and a material")
 
 
 @receiver(post_save, sender=Piece)
@@ -479,6 +512,7 @@ class PrintJob(models.Model):
     success = models.NullBooleanField()
     created = models.DateTimeField(default=timezone.now)
     end_time = models.DateTimeField(null=True)
+    filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
 
     @property
     def printing(self):
