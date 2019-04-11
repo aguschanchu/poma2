@@ -120,6 +120,19 @@ class OctoprintTaskManager(models.Manager):
         return o
 
 
+class FilamentChange(models.Model):
+    new_filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
+    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='filament_change')
+    confirmed = models.BooleanField(default=False)
+    created = models.DateTimeField(default=timezone.now)
+    confimed_date = models.DateTimeField(null=True)
+
+    @staticmethod
+    def filament_change_mean_duration():
+        # Time that takes a filament change. The idea es to calculate this automatically, based on previous events
+        return 10*60
+
+
 class OctoprintTask(models.Model):
     task_types = (('command', 'Command'),
                   ('job', 'Print job'))
@@ -154,11 +167,15 @@ class OctoprintTask(models.Model):
             return not self.filament_change.confirmed
         if hasattr(self, 'print_job'):
             return self.print_job.awaiting_for_bed_removal
+        return False
 
-class FilamentChange(models.Model):
-    new_filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
-    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='filament_change')
-    confirmed = models.BooleanField(default=False)
+    @property
+    def time_left(self):
+        if hasattr(self, 'filament_change'):
+            return FilamentChange.filament_change_mean_duration()
+        if hasattr(self, 'print_job'):
+            return self.connection.status.job.estimated_print_time_left
+        return 0
 
 
 class OctoprintJobStatus(models.Model):
@@ -244,6 +261,22 @@ class OctoprintConnection(models.Model):
     @property
     def connection_ready(self):
         return not self.locked and self.status.instance_ready
+
+    @property
+    def awaiting_for_human_intervention(self):
+        return self.active_task.awaiting_for_human_intervention if self.active_task is not None else False
+
+    @property
+    def active_task_ready_or_free(self):
+        return self.active_task.ready if self.active_task is not None else True
+
+    @property
+    def printer_ready(self):
+        return self.connection_ready and self.active_task_ready_or_free and not self.awaiting_for_human_intervention
+
+    @property
+    def time_left(self):
+        return self.active_task.time_left if self.active_task is not None else 0
 
     # Check if octoprint API url is valid
     def ping(self):
