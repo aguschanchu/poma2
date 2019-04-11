@@ -51,11 +51,15 @@ class ConfigurationFile(models.Model):
         slicer_profiles_helper.import_available_profiles(self)
 
 
+def default_bed_size():
+    return [0, 0, 0]
+
 class PrinterProfile(models.Model):
     name = models.CharField(max_length=300)
     base_quality = models.FloatField(default=1)
     nozzle_diameter = models.FloatField(default=0.4)
     printer_model = models.CharField(max_length=200)
+    bed_shape = ArrayField(base_field=models.FloatField(), size=3, default=default_bed_size, null=True)
     # config_name es el nombre que se utiliza en la configuracion referenciada
     config_name = models.CharField(max_length=200)
     config_file = models.ForeignKey(ConfigurationFile, on_delete=models.CASCADE)
@@ -66,7 +70,9 @@ class PrinterProfile(models.Model):
         return self.name
 
     def get_dict(self):
-        return {**self.config, **model_to_dict(self, fields=['nozzle_diameter', 'printer_model'])}
+        return {**self.config, **model_to_dict(self, fields=['nozzle_diameter', 'printer_model']),
+                'max_print_height': self.bed_shape[2],
+                'bed_shape': "0x0,{x}x0,{x}x{y},0x{y}".format(x=self.bed_shape[0], y=self.bed_shape[1])}
 
 
 class MaterialProfile(models.Model):

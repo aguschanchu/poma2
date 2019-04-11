@@ -10,6 +10,20 @@ class PrinterProfileAdmin(admin.ModelAdmin):
     formfield_overrides = {
         JSONField: {'widget': PrettyJSONWidget(attrs={'initial': 'parsed'})}
     }
+    readonly_fields = ('bed_size', )
+
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'base_quality', 'nozzle_diameter', 'config_file', 'config')
+        }),
+        ('Bed size', {
+            'fields': ('bed_size',),
+        }),
+    )
+
+    def bed_size(self, obj):
+        return format_html('<b>x</b>: {x} mm <br><b>y</b>: {y} mm <br> <b>z</b>: {z} mm <br>'.format(x=obj.bed_shape[0], y=obj.bed_shape[1], z=obj.bed_shape[2]))
+
 
 @admin.register(MaterialProfile)
 class MaterialProfileAdmin(admin.ModelAdmin):
@@ -35,6 +49,7 @@ class PrintProfileAdmin(admin.ModelAdmin):
         self.message_user(request, "{} successfully refreshed".format(queryset.count()))
 
     refresh_compatible_printers.short_description = "Refresh compatible printers"
+
 
 @admin.register(ConfigurationFile)
 class ConfigurationFileAdmin(admin.ModelAdmin):
@@ -62,6 +77,7 @@ class ConfigurationFileAdmin(admin.ModelAdmin):
 
     import_profile.short_description = "Import selected profiles"
 
+
 class GeometryResultInline(admin.StackedInline):
     model = GeometryResult
     fields = ('mean_layer_height', 'image', 'error_log')
@@ -69,6 +85,7 @@ class GeometryResultInline(admin.StackedInline):
 
     def image(self, obj):
         return format_html('<img src=' + obj.plot.url + ' width="40%" height="40%"></img>')
+
 
 class TweakerResultInline(admin.StackedInline):
     model = TweakerResult

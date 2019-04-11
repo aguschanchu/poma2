@@ -37,7 +37,7 @@ class FilamentAdmin(admin.ModelAdmin):
         }),
         ('Advanced options', {
             'classes': ('collapse',),
-            'fields': ('name', 'bed_temperature', 'nozzle_temperature', 'density', 'price_per_kg'),
+            'fields': ('name', 'bed_temperature', 'nozzle_temperature'),
         }),
     )
 
@@ -98,3 +98,9 @@ class OctoprintTaskAdmin(admin.ModelAdmin):
 @admin.register(Gcode)
 class GcodeAdmin(admin.ModelAdmin):
     list_display = ('id',)
+
+
+@admin.register(Printer)
+class GcodeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'printer_ready', 'printer_enabled')
+

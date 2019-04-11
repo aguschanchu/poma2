@@ -9,6 +9,8 @@ import subprocess
 from slaicer.tasks import parse_build_time
 from django.conf import settings
 import traceback
+from .scheduler import *
+
 
 @shared_task(queue='celery')
 def quote_gcode(piece_id):
@@ -216,6 +218,5 @@ def octoprint_task_dispatcher():
                 ct = send_octoprint_task.delay(t.id)
                 t.celery_id = ct.id
                 t.save()
-
 
 

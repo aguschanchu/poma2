@@ -107,6 +107,12 @@ def import_printer_profile(conf, category: str):
     p.base_quality = cat_config.pop('base_quality') if 'base_quality' in cat_config.keys() else 1
     p.nozzle_diameter = cat_config.pop('nozzle_diameter') if 'nozzle_diameter' in cat_config.keys() else 0.4
     p.printer_model = cat_config.pop('printer_model')
+    bed_shape = [a.split('x') for a in cat_config.pop('bed_shape').split(',')]
+    if len(bed_shape) != 4:
+        # Probably a invalid config was specified
+        p.bed_shape = [200, 200, 200]
+    else:
+        p.bed_shape = [bed_shape[2][0], bed_shape[2][1], cat_config.pop('max_print_height') if 'max_print_height' in cat_config.keys() else 200]
     p.config = cat_config
     p.save()
     return p

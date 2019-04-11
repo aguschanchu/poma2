@@ -242,11 +242,14 @@ class OctoprintStatus(models.Model):
     def instance_ready(self):
         return self.ready and not self.connectionError
 
+    @property
+    def printer_disabled(self):
+        return self.closedOrError or self.connectionError
 
 class OctoprintConnection(models.Model):
     url = models.CharField(max_length=300, validators=[URLValidator(schemes=['http', 'https'])])
     apikey = models.CharField(max_length=200)
-    active_task = models.ForeignKey(OctoprintTask, on_delete=models.SET_NULL, null=True)
+    active_task = models.ForeignKey(OctoprintTask, on_delete=models.SET_NULL, null=True, blank=True)
     # If the connection is locked, no new tasks will be executed from the queue.
     locked = models.BooleanField(default=False)
     # Octoprint flags
@@ -381,9 +384,19 @@ class Printer(models.Model):
     printer_type = models.ForeignKey('slaicer.PrinterProfile', on_delete=models.CASCADE)
     connection = models.OneToOneField(OctoprintConnection, related_name='printer', on_delete=models.CASCADE)
     filament = models.ForeignKey(Filament, null=True, on_delete=models.SET_NULL)
+    # Used to disable manually the printer from the system
+    disabled = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
+
+    @property
+    def printer_ready(self):
+        return self.connection.printer_ready
+
+    @property
+    def printer_enabled(self):
+        return not (self.disabled or self.connection.status.printer_disabled)
 
 '''
 Orders models definitions
@@ -434,15 +447,18 @@ class Piece(models.Model):
 
     @property
     def completed_pieces(self):
-        return self.unit_pieces.filter(success=True).count()
+        return len([p for p in self.unit_pieces.all() if p.success])
 
     @property
     def pending_pieces(self):
-        return self.unit_pieces.filter(pending=True).count()
+        return len([p for p in self.unit_pieces.all() if p.pending])
 
     @property
     def queued_pieces(self):
         return self.copies - self.completed_pieces - self.pending_pieces
+
+    def get_deadline_from_now(self):
+        return  (self.order.due_date - timezone.localdate()).total_seconds()
 
     def quote_ready(self):
         if self.stl is not None:
@@ -465,6 +481,8 @@ class Piece(models.Model):
             return self.quote.weight
         else:
             return self.gcode.weight
+
+
 
 
 @receiver(pre_save, sender=Piece)

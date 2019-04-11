@@ -10,3 +10,4 @@ woocommerce
 psycopg2-binary
 transforms3d
 prettyjson
+ortools
