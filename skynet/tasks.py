@@ -210,7 +210,9 @@ def octoprint_task_dispatcher():
                 if 'dep' in locals():
                     t = dep
                 else:
-                    t = conn.tasks.filter(celery_id=None, dependencies_ready=True).first()
+                    t = [x for x in conn.tasks.filter(celery_id=None).all() if x.dependencies_ready is True].pop()
+                    if t is None:
+                        return None
                 # Mark task as active
                 conn.active_task = t
                 conn.save()

@@ -125,7 +125,7 @@ class FilamentChangeManager(models.Manager):
     def issue_change(self, new_filament, connection):
         o = self.create(new_filament=new_filament)
         old_filament = connection.printer.filament
-        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n M600".format(bed_temp=max(new_filament.get_bed_temperature(), old_filament.get_bed_temperature()),
+        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n G28".format(bed_temp=max(new_filament.get_bed_temperature(), old_filament.get_bed_temperature()),
                                                                         nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()))
         o.task = connection.create_task(file=ContentFile(gcode))
         o.save()
@@ -139,12 +139,12 @@ class FilamentChange(models.Model):
     created = models.DateTimeField(default=timezone.now)
     confirmed_date = models.DateTimeField(null=True)
 
-    objects = FilamentChangeManager
+    objects = FilamentChangeManager()
 
     @staticmethod
     def filament_change_mean_duration():
         # Time that takes a filament change. The idea es to calculate this automatically, based on previous events
-        return 10*60
+        return 15*60
 
 
 @receiver(pre_save, sender=FilamentChange)
@@ -202,8 +202,11 @@ class OctoprintTask(models.Model):
         if hasattr(self, 'filament_change'):
             return FilamentChange.filament_change_mean_duration()
         if hasattr(self, 'print_job'):
-            return self.connection.status.job.estimated_print_time_left
-        return 0
+            if self.print_job.awaiting_for_bed_removal:
+                return 60*15
+            else:
+                return self.connection.status.job.estimated_print_time_left
+        return 1
 
     @property
     def dependencies_ready(self):
@@ -237,6 +240,7 @@ class OctoprintStatus(models.Model):
     last_update = models.DateTimeField(auto_now=True)
     temperature = models.OneToOneField(OctoprintTemperature, on_delete=models.CASCADE, null=True)
     job = models.OneToOneField(OctoprintJobStatus, on_delete=models.CASCADE, null=True)
+    connection = models.OneToOneField('OctoprintConnection', null=True, on_delete=models.CASCADE, related_name='status')
 
     @property
     def instance_ready(self):
@@ -253,7 +257,7 @@ class OctoprintConnection(models.Model):
     # If the connection is locked, no new tasks will be executed from the queue.
     locked = models.BooleanField(default=False)
     # Octoprint flags
-    status = models.OneToOneField(OctoprintStatus, null=True, on_delete=models.CASCADE)
+
 
     @staticmethod
     def _get_connection_pool():
@@ -282,7 +286,7 @@ class OctoprintConnection(models.Model):
         file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode' if file.name is None else file.name
         with file.open('r') as f:
             # We add a M400 command at the end of the file, so, we avoid problems due marlin gcode cache
-            file_content = f.read() + 'M400 \nM115'
+            file_content = f.read() + '\nM400 \nM115'
             r = json.loads(self._get_connection_pool().request('POST', urljoin(self.url, 'api/files/local'),
                                                                headers=self._get_connection_headers(json_content=False),
                                                                fields={'print': True,
@@ -330,11 +334,12 @@ class OctoprintConnection(models.Model):
             # Instance status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/printer'),
                                                                headers=self._get_connection_headers()).data.decode('utf-8'))
-            OctoprintStatus.objects.filter(octoprintconnection=self).update(**r['state']['flags'], connectionError = False)
+            OctoprintStatus.objects.filter(connection=self).update(**r['state']['flags'], connectionError = False)
             self.refresh_from_db()
             if 'temperature' in r.keys():
-                self.status.temperature.tool = r['temperature'].get('tool0')
-                self.status.temperature.bed = r['temperature'].get('bed')
+                self.status.temperature.tool = r['temperature'].get('tool0')['actual'] if r['temperature'].get('tool0') is not None else None
+                self.status.temperature.bed = r['temperature'].get('bed')['actual'] if r['temperature'].get('bed') is not None else None
+                self.status.temperature.save()
             # Job status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/job'),
                                                                headers=self._get_connection_headers()).data.decode('utf-8'))
@@ -362,9 +367,8 @@ def validate_octoprint_connection_on_creation(sender, instance, update_fields, *
 def create_octoprint_state(sender, instance, created, **kwargs):
     if created:
         o = OctoprintStatus.objects.create(job=OctoprintJobStatus.objects.create(),
-                                           temperature=OctoprintTemperature.objects.create())
-        instance.status = o
-        instance.save()
+                                           temperature=OctoprintTemperature.objects.create(),
+                                           connection=instance)
         # Status update scheduling
         # TODO: Modify update period accordingly to task
         schedule, created = IntervalSchedule.objects.get_or_create(every=2, period=IntervalSchedule.SECONDS)
@@ -483,8 +487,6 @@ class Piece(models.Model):
             return self.gcode.weight
 
 
-
-
 @receiver(pre_save, sender=Piece)
 def validate_piece(sender, instance, update_fields, **kwargs):
     # We need an STL or a Gcode, but not both
@@ -529,7 +531,7 @@ class PrintJob(models.Model):
     gcode = models.FileField(upload_to='gcode/')
     success = models.NullBooleanField()
     created = models.DateTimeField(default=timezone.now)
-    end_time = models.DateTimeField(null=True)
+    end_time = models.DateTimeField(null=True, blank=True)
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
 
     @property
@@ -538,7 +540,7 @@ class PrintJob(models.Model):
 
     @property
     def awaiting_for_bed_removal(self):
-        return not self.priting and self.success is None
+        return not self.printing and self.success is None
 
     @property
     def pending(self):

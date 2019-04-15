@@ -6,8 +6,10 @@ from skynet.models import *
 class ColorAdmin(admin.ModelAdmin):
     list_display = ('name',)
 
+
 class MaterialAdmin(admin.ModelAdmin):
     list_display = ('name', )
+
 
 class FilamentProviderAdmin(admin.ModelAdmin):
     list_display = ('name', 'telephone')
@@ -72,28 +74,45 @@ admin.site.register(Filament, FilamentAdmin)
 admin.site.register(Order, OrderAdmin)
 admin.site.register(Piece, PieceAdmin)
 
+
+class OctoprintStatusInline(admin.StackedInline):
+    model = OctoprintStatus
+
 @admin.register(OctoprintConnection)
 class OctoprintConnectionAdmin(admin.ModelAdmin):
     list_display = ('url', 'apikey', 'active_task_running')
+    readonly_fields = ('temperature', 'estimated_time_left')
     fieldsets = (
         (None, {
-            'fields': ('url', 'apikey', 'active_task')
+            'fields': ('url', 'apikey', 'active_task', 'temperature', 'estimated_time_left'),
         }),
     )
+    inlines = [OctoprintStatusInline]
 
     def active_task_running(self, obj):
         return False if obj.active_task is None else True
+
+    def temperature(self, obj):
+        return "Tool: {tool}, Bed: {bed}".format(tool=obj.status.temperature.tool, bed=obj.status.temperature.bed)
+
+    def estimated_time_left(self, obj):
+        return obj.status.job.estimated_print_time_left
+
 
     active_task_running.boolean = True
 
 @admin.register(OctoprintTask)
 class OctoprintTaskAdmin(admin.ModelAdmin):
-    list_display = ('connection', 'type', 'file', 'job_sent', 'ready')
+    list_display = ('connection', 'type', 'file', 'job_sent', 'ready', 'awaiting_for_human_intervention')
 
     def ready(self, obj):
         return obj.ready
 
+    def awaiting_for_human_intervention(self, obj):
+        return obj.awaiting_for_human_intervention
+
     ready.boolean = True
+    awaiting_for_human_intervention.boolean = True
 
 @admin.register(Gcode)
 class GcodeAdmin(admin.ModelAdmin):
@@ -104,3 +123,37 @@ class GcodeAdmin(admin.ModelAdmin):
 class GcodeAdmin(admin.ModelAdmin):
     list_display = ('name', 'printer_ready', 'printer_enabled')
 
+
+@admin.register(FilamentChange)
+class FilamentChangeAdmin(admin.ModelAdmin):
+    list_display = ('id', 'new_filament', 'confirmed', 'printer')
+    actions = ['confirm_change']
+
+    def printer(self, obj):
+        return obj.task.connection.printer
+
+    def confirm_change(self, request, queryset):
+        queryset.update(confirmed=True)
+        self.message_user(request, "{} successfully confirmed".format(queryset.count()))
+
+    confirm_change.short_description = "Confirm filament change"
+
+
+class UnitPieceInline(admin.TabularInline):
+    model = UnitPiece
+    classes = ['collapse']
+
+
+@admin.register(PrintJob)
+class PrintJobAdmin(admin.ModelAdmin):
+    list_display = ('id', 'created', 'filament', 'printing', 'awaiting_for_bed_removal', 'success')
+    inlines = [UnitPieceInline]
+
+    def printing(self, obj):
+        return obj.printing
+
+    def awaiting_for_bed_removal(self, obj):
+        return obj.awaiting_for_bed_removal
+
+    printing.boolean = True
+    awaiting_for_bed_removal.boolean = True
