@@ -68,7 +68,7 @@ def poma_scheduler():
             if m.connection.active_task is not None:
                 at = m.connection.active_task
                 if not at.finished:
-                    tasks_data.append(task_data_type('OT{}'.format(at.id), int(at.time_left), int(at.time_left*1.5), [x for x in machines_corresp_to_db.keys() if machines_corresp_to_db[x] == m.id][0]))
+                    tasks_data.append(task_data_type('OT{}'.format(at.id), int(at.time_left), int(at.time_left), [x for x in machines_corresp_to_db.keys() if machines_corresp_to_db[x] == m.id][0]))
                     pass
 
         print(tasks_data)
@@ -119,9 +119,10 @@ def poma_scheduler():
                                                                     interval=interval_o, machine=m, flag=flag))
 
                         ## We only propagate the constraint if the task is performed on the machine
-                        model.Add(start_var == start_var_o).OnlyEnforceIf(flag)
-                        model.Add(machine_var == m).OnlyEnforceIf(flag)
-
+                        model.Add(start_var == start_var_o)
+                        model.Add(machine_var == m)
+                        model.Add(start_var_o == 0)
+                        model.Add(flag == True)
 
         # Constrains
 
