@@ -17,6 +17,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError
 from django.forms.models import model_to_dict
+from django.apps import apps
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -318,6 +319,14 @@ class SliceJob(models.Model):
             raise ValidationError("Profile not specified")
         self.celery_id = tasks.slice_model.s(self.id).apply_async()
         self.save(update_fields=['celery_id'])
+
+    # Sometimes we need the build_time, while we are slicing the model
+    def get_estimated_build_time(self):
+        tt = 0
+        Piece = apps.get_model('skynet.Piece')
+        for m in self.geometry_models.all():
+            tt += Piece.objects.filter(stl=m).first().quote.build_time
+        return tt
 
 
 '''

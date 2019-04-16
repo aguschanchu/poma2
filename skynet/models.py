@@ -104,23 +104,6 @@ class FilamentPurchase(models.Model):
 OctoprintConnection handles API endpoints with octoprint
 '''
 
-class OctoprintTaskManager(models.Manager):
-    def create_task(self, connection, commands=None, file=None):
-        # It's a valid task?
-        if file is None and commands is None or commands is not None and file is not None:
-            raise ValidationError("Please specify a command or a file")
-        if file is not None:
-            file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode'
-            o = self.create(type='job', connection=connection)
-            o.file.save(file_name, file)
-        else:
-            # So, it's a command task. Before, we check if the object received is a file, or just a string
-            if hasattr(commands, 'open'):
-                commands = commands.open('r').read()
-            o = self.create(type='command', commands=commands, connection=connection)
-        return o
-
-
 class FilamentChangeManager(models.Manager):
     def issue_change(self, new_filament, connection):
         o = self.create(new_filament=new_filament)
@@ -155,15 +138,36 @@ def update_printer_filament_on_confirmation(sender, instance, update_fields, **k
         printer.save()
 
 
+class OctoprintTaskManager(models.Manager):
+    def create_task(self, connection, commands=None, file=None, slicejob=None):
+        # It's a valid task?
+        if len([x for x in [connection, commands, file] if x is not None]) == 1:
+            raise ValidationError("Please specify a command or a file or a slicejob")
+        if file is not None:
+            file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode'
+            o = self.create(type='job', connection=connection)
+            o.file.save(file_name, file)
+        if commands is not None:
+            # So, it's a command task. Before, we check if the object received is a file, or just a string
+            if hasattr(commands, 'open'):
+                commands = commands.open('r').read()
+            o = self.create(type='command', commands=commands, connection=connection)
+        else:
+            o = self.create(type='slice-and-print-job', slicejob=slicejob, connection=connection)
+        return o
+
+
 class OctoprintTask(models.Model):
     task_types = (('command', 'Command'),
-                  ('job', 'Print job'))
+                  ('job', 'Print job'),
+                  ('slice-and-print-job', 'Slice and print job'))
     celery_id = models.CharField(max_length=200, null=True)
     connection = models.ForeignKey('OctoprintConnection', on_delete=models.CASCADE, related_name='tasks')
     type = models.CharField(choices=task_types, default='job', max_length=200)
     # Accepts multiple commands, separated each one with a newline ('\n')
     commands = models.TextField(null=True)
     file = models.FileField(null=True)
+    slicejob = models.ForeignKey('slaicer.SliceJob', null=True, on_delete=models.SET_NULL, blank=True)
     # Used to track task status
     job_sent = models.BooleanField(default=False)
     job_filename = models.CharField(max_length=300, null=True)
@@ -179,7 +183,16 @@ class OctoprintTask(models.Model):
             return AsyncResult(self.celery_id).state
 
     @property
+    def slice_job_ready(self):
+        if self.slicejob is None:
+            return True
+        else:
+            return self.slicejob.ready()
+
+    @property
     def ready(self):
+        if not self.slice_job_ready:
+            return False
         if self.celery_id is None:
             return False
         else:
@@ -199,6 +212,9 @@ class OctoprintTask(models.Model):
 
     @property
     def time_left(self):
+        # TODO: Handle time planning better when we have slicejobs in progress
+        if not self.slice_job_ready:
+            self.slicejob.get_estimated_build_time()
         if hasattr(self, 'filament_change'):
             return FilamentChange.filament_change_mean_duration()
         if hasattr(self, 'print_job'):
@@ -211,6 +227,12 @@ class OctoprintTask(models.Model):
     @property
     def dependencies_ready(self):
         return (self.dependency.dependencies_ready and self.dependency.finished) if self.dependency is not None else True
+
+    def get_file(self):
+        if self.type == 'job':
+            return self.file
+        else:
+            return self.slicejob.gcode
 
 
 class OctoprintJobStatus(models.Model):
@@ -352,8 +374,8 @@ class OctoprintConnection(models.Model):
             self.status.connectionError = True
             self.status.save()
 
-    def create_task(self, commands=None, file=None):
-        return OctoprintTask.objects.create_task(self, commands=commands, file=file)
+    def create_task(self, commands=None, file=None, slicejob=None):
+        return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob)
 
 
 @receiver(pre_save, sender=OctoprintConnection)
@@ -528,7 +550,6 @@ class UnitPiece(models.Model):
 
 class PrintJob(models.Model):
     task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='print_job')
-    gcode = models.FileField(upload_to='gcode/')
     success = models.NullBooleanField()
     created = models.DateTimeField(default=timezone.now)
     end_time = models.DateTimeField(null=True, blank=True)

@@ -151,6 +151,9 @@ class PrintNotFinished(Exception):
    """Print not finished exception, used for celery autoretry"""
    pass
 
+class SlicingNotFinished(Exception):
+   """Slicejob not finished exception, used for celery autoretry"""
+   pass
 
 @shared_task(queue='celery', autoretry_for=(PrintNotFinished,), max_retries=None, default_retry_delay=2)
 def send_octoprint_task(task_id):
@@ -160,15 +163,17 @@ def send_octoprint_task(task_id):
     object manager
     """
     task = skynet_models.OctoprintTask.objects.get(pk=task_id)
-    # type: command
+    # Type: command
     if task.type == 'command':
         task.job_sent = True
         task.save()
         return task.connection._issue_command(task.commands)
-    # type: job
+    # Type: job or slicejob
+    if not task.slice_job_ready:
+        raise SlicingNotFinished
     ## Let's send the job
     if not task.job_sent:
-        t = task.connection._print_file(task.file)
+        t = task.connection._print_file(task.get_file())
         if t is not None:
             task.job_sent = True
             task.job_filename = t
@@ -179,7 +184,6 @@ def send_octoprint_task(task_id):
         raise ValueError("Incorrect job name. Printer was manually controlled, so, we lost job tracking")
     if task.connection.status.printing:
         raise PrintNotFinished
-        print("Printing")
     else:
         return True
 
