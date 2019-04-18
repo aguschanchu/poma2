@@ -3,6 +3,9 @@ from celery import shared_task, group
 from ortools.sat.python import cp_model
 import collections
 import skynet.models as skynet_models
+from django.conf import settings
+import datetime
+import pytz
 
 '''
 El Scheduler planifica las tareas de poma, y corre periodicamente. En lineas generales, realiza lo siguiente
@@ -34,6 +37,50 @@ def print_piece_on_printer_check(piece, printer):
     return True
 
 
+def get_formatted_forbidden_bounds(horizon):
+    '''
+    Scheduler uses relative times, so, we need to translate it
+    '''
+    # We add timezone information
+    tzinfo = pytz.timezone(settings.TIME_ZONE)
+    now = datetime.datetime.now(tz=tzinfo)
+    forbidden_zone = collections.namedtuple('zonet', 'start duration end')
+    zones = [forbidden_zone(
+        start=datetime.datetime.combine(datetime.datetime.today(), datetime.time(hour=x.start, tzinfo=now.tzinfo)),
+        duration=datetime.timedelta(hours=x.duration),
+        end=datetime.datetime.combine(datetime.datetime.today(),
+                                      datetime.time(hour=x.start, tzinfo=now.tzinfo)) + datetime.timedelta(hours=x.duration))
+        for x in settings.FORBIDDEN_ZONES]
+    # We create a copy of each zone
+    zones_in_horizon = []
+    for zone in zones:
+        zones_in_horizon += [forbidden_zone(start=zone.start+datetime.timedelta(days=j),
+                                            duration=zone.duration,
+                                            end=zone.end+datetime.timedelta(days=j))
+                             for j in range(-2, horizon // (3600*24) +1)]
+
+    fzones = []
+    fzone_format = collections.namedtuple('fzone', 'start end')
+    for zone in zones_in_horizon:
+        # Are we currently on a forbidden zone?
+        if now > zone.start and now < zone.end:
+            fzones.append(fzone_format(start=60, end=round((zone.end-now).total_seconds())))
+        elif now > zone.end:
+            pass
+        else:
+            fzones.append(fzone_format(start=round((zone.start-now).total_seconds()), end=round((zone.end-now).total_seconds())))
+    fzones = sorted(fzones, key=lambda x: x.start)
+    # We create bounds according to AddLinearConstraintWithBounds needs
+    bounds = [0, fzones[0].start]
+    fzones_count = len(fzones)
+    for i in range(0, fzones_count):
+        if i == fzones_count - 1:
+            bounds += [fzones[i].end, max(fzones[i].end, horizon)]
+        else:
+            bounds += [fzones[i].end, fzones[i+1].start]
+    return bounds
+
+
 @shared_task(queue='celery')
 def poma_scheduler():
         # Pending pieces
@@ -55,6 +102,9 @@ def poma_scheduler():
 
         # Horizon definition
         horizon = sum([t.processing_time for t in tasks_data])
+
+        # Forbidden zones definition
+        bounds = get_formatted_forbidden_bounds(horizon)
 
         # Machines queue definition
         machines_queue = {}
@@ -137,6 +187,11 @@ def poma_scheduler():
         ## Jobs should be ended by deadline
         for task_i in all_tasks:
             model.Add(task_i.end <= task_i.data.deadline)
+
+        print(bounds)
+        ## Forbidden zones constrains
+        for task in all_tasks:
+            model.AddLinearConstraintWithBounds([(task.start, 1)], bounds)
 
         # Makespan objective.
         obj_var = model.NewIntVar(0, horizon, 'makespan')

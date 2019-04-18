@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 
 import os
 from .localenv import *
-
+import datetime
+import pytz
+import collections
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -122,8 +124,6 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
-
 USE_I18N = True
 
 USE_L10N = True
@@ -150,8 +150,11 @@ CELERY_PREFETCH_MULTIPLIER = 1
 CELERY_QUEUES = ('celery')
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers.DatabaseScheduler'
 
-# Slaicer configuration
-
+# Task planning configuration
+TIME_ZONE = 'America/Argentina/Buenos_Aires'
+## Forbidden zones configuration
+forbidden_zone = collections.namedtuple('zone', 'start duration')
+FORBIDDEN_ZONES = [forbidden_zone(start=21, duration=12)]
 
 
 # Temp WooCommerce API Key
