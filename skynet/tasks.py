@@ -147,13 +147,16 @@ def cura_parser(filename):
 OctoprintConnection Celery tasks
 '''
 
+
 class PrintNotFinished(Exception):
    """Print not finished exception, used for celery autoretry"""
    pass
 
+
 class SlicingNotFinished(Exception):
    """Slicejob not finished exception, used for celery autoretry"""
    pass
+
 
 @shared_task(queue='celery', autoretry_for=(PrintNotFinished,), max_retries=None, default_retry_delay=2)
 def send_octoprint_task(task_id):

@@ -5,6 +5,7 @@ from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError
 from urllib.parse import urljoin
+
 urllib3.disable_warnings()
 from celery.result import AsyncResult
 from django.utils import timezone
@@ -25,10 +26,11 @@ from django.core.files.base import ContentFile
 Materials and colors model definition
 '''
 
+
 # Color Model
 class Color(models.Model):
     name = models.CharField(max_length=100)
-    #Hex color code
+    # Hex color code
     code = models.CharField(max_length=6, validators=[MinLengthValidator(6)])
 
     def __str__(self):
@@ -44,7 +46,6 @@ class Material(models.Model):
 
     def __str__(self):
         return self.name
-
 
 
 # Filament Provider Model
@@ -99,20 +100,27 @@ class FilamentPurchase(models.Model):
     date = models.DateField(default=timezone.now)
 
 
-
 '''
 OctoprintConnection handles API endpoints with octoprint
 '''
+
 
 class FilamentChangeManager(models.Manager):
     def issue_change(self, new_filament, connection):
         o = self.create(new_filament=new_filament)
         old_filament = connection.printer.filament
-        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n G28".format(bed_temp=max(new_filament.get_bed_temperature(), old_filament.get_bed_temperature()),
-                                                                        nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()))
+        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n G28".format(
+            bed_temp=max(new_filament.get_bed_temperature(), old_filament.get_bed_temperature()),
+            nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()))
         o.task = connection.create_task(file=ContentFile(gcode))
         o.save()
         return o
+
+    def issue_change_and_start_task(self, new_filament, connection, commands=None, file=None, slicejob=None):
+        # We create the ChangeFilament task
+        cf_task = self.issue_change(new_filament=new_filament, connectionn=connection)
+        p_task = connection.create_task(commands=commands, file=file, slicejob=slicejob, dependency=cf_task)
+        return cf_task
 
 
 class FilamentChange(models.Model):
@@ -127,11 +135,12 @@ class FilamentChange(models.Model):
     @staticmethod
     def filament_change_mean_duration():
         # Time that takes a filament change. The idea es to calculate this automatically, based on previous events
-        return 15*60
+        return 15 * 60
 
 
 @receiver(pre_save, sender=FilamentChange)
 def update_printer_filament_on_confirmation(sender, instance, update_fields, **kwargs):
+    # TODO: Tener cuidado si actualizan una instancia vieja. De todos modos, esto no deberia suceder, de modo que no es muy grave
     if instance.confirmed:
         printer = instance.task.connection.printer
         printer.filament = instance.new_filament
@@ -139,7 +148,7 @@ def update_printer_filament_on_confirmation(sender, instance, update_fields, **k
 
 
 class OctoprintTaskManager(models.Manager):
-    def create_task(self, connection, commands=None, file=None, slicejob=None):
+    def create_task(self, connection, commands=None, file=None, slicejob=None, dependency=None):
         # It's a valid task?
         if len([x for x in [connection, commands, file] if x is not None]) == 1:
             raise ValidationError("Please specify a command or a file or a slicejob")
@@ -153,7 +162,7 @@ class OctoprintTaskManager(models.Manager):
                 commands = commands.open('r').read()
             o = self.create(type='command', commands=commands, connection=connection)
         else:
-            o = self.create(type='slice-and-print-job', slicejob=slicejob, connection=connection)
+            o = self.create(type='slice-and-print-job', slicejob=slicejob, connection=connection, dependency=dependency)
         return o
 
 
@@ -219,14 +228,15 @@ class OctoprintTask(models.Model):
             return FilamentChange.filament_change_mean_duration()
         if hasattr(self, 'print_job'):
             if self.print_job.awaiting_for_bed_removal:
-                return 60*15
+                return 60 * 15
             else:
                 return self.connection.status.job.estimated_print_time_left
         return 1
 
     @property
     def dependencies_ready(self):
-        return (self.dependency.dependencies_ready and self.dependency.finished) if self.dependency is not None else True
+        return (
+                    self.dependency.dependencies_ready and self.dependency.finished) if self.dependency is not None else True
 
     def get_file(self):
         if self.type == 'job':
@@ -272,14 +282,15 @@ class OctoprintStatus(models.Model):
     def printer_disabled(self):
         return self.closedOrError or self.connectionError
 
+
 class OctoprintConnection(models.Model):
     url = models.CharField(max_length=300, validators=[URLValidator(schemes=['http', 'https'])])
     apikey = models.CharField(max_length=200)
     active_task = models.ForeignKey(OctoprintTask, on_delete=models.SET_NULL, null=True, blank=True)
     # If the connection is locked, no new tasks will be executed from the queue.
     locked = models.BooleanField(default=False)
-    # Octoprint flags
 
+    # Octoprint flags
 
     @staticmethod
     def _get_connection_pool():
@@ -305,14 +316,16 @@ class OctoprintConnection(models.Model):
 
     def _print_file(self, file: File):
         # Accepts Django File or ContentFile class
-        file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode' if file.name is None else file.name
+        file_name = ''.join(
+            random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode' if file.name is None else file.name
         with file.open('r') as f:
             # We add a M400 command at the end of the file, so, we avoid problems due marlin gcode cache
             file_content = f.read() + '\nM400 \nM115'
             r = json.loads(self._get_connection_pool().request('POST', urljoin(self.url, 'api/files/local'),
                                                                headers=self._get_connection_headers(json_content=False),
                                                                fields={'print': True,
-                                                                       'file': (file_name, file_content)}).data.decode('utf-8'))
+                                                                       'file': (file_name, file_content)}).data.decode(
+                'utf-8'))
 
         if r.get('done'):
             return file_name
@@ -355,16 +368,20 @@ class OctoprintConnection(models.Model):
         try:
             # Instance status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/printer'),
-                                                               headers=self._get_connection_headers()).data.decode('utf-8'))
-            OctoprintStatus.objects.filter(connection=self).update(**r['state']['flags'], connectionError = False)
+                                                               headers=self._get_connection_headers()).data.decode(
+                'utf-8'))
+            OctoprintStatus.objects.filter(connection=self).update(**r['state']['flags'], connectionError=False)
             self.refresh_from_db()
             if 'temperature' in r.keys():
-                self.status.temperature.tool = r['temperature'].get('tool0')['actual'] if r['temperature'].get('tool0') is not None else None
-                self.status.temperature.bed = r['temperature'].get('bed')['actual'] if r['temperature'].get('bed') is not None else None
+                self.status.temperature.tool = r['temperature'].get('tool0')['actual'] if r['temperature'].get(
+                    'tool0') is not None else None
+                self.status.temperature.bed = r['temperature'].get('bed')['actual'] if r['temperature'].get(
+                    'bed') is not None else None
                 self.status.temperature.save()
             # Job status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/job'),
-                                                               headers=self._get_connection_headers()).data.decode('utf-8'))
+                                                               headers=self._get_connection_headers()).data.decode(
+                'utf-8'))
             self.status.job.name = r['job']['file']['name']
             self.status.job.estimated_print_time = r['job']['estimatedPrintTime']
             self.status.job.estimated_print_time_left = r['progress']['printTimeLeft']
@@ -374,8 +391,8 @@ class OctoprintConnection(models.Model):
             self.status.connectionError = True
             self.status.save()
 
-    def create_task(self, commands=None, file=None, slicejob=None):
-        return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob)
+    def create_task(self, commands=None, file=None, slicejob=None, dependency=None):
+        return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=None)
 
 
 @receiver(pre_save, sender=OctoprintConnection)
@@ -384,6 +401,7 @@ def validate_octoprint_connection_on_creation(sender, instance, update_fields, *
     if not update_fields:
         if not instance.ping():
             raise ValidationError("Error on connecting to octoprint instance")
+
 
 @receiver(post_save, sender=OctoprintConnection)
 def create_octoprint_state(sender, instance, created, **kwargs):
@@ -404,6 +422,7 @@ def create_octoprint_state(sender, instance, created, **kwargs):
 Printers models definitions
 '''
 
+
 # Printer Model
 class Printer(models.Model):
     name = models.CharField(max_length=200)
@@ -423,6 +442,7 @@ class Printer(models.Model):
     @property
     def printer_enabled(self):
         return not (self.disabled or self.connection.status.printer_disabled)
+
 
 '''
 Orders models definitions
@@ -446,6 +466,7 @@ class Gcode(models.Model):
 # Order Models
 def order_default_due_date():
     return timezone.now() + timedelta(days=4)
+
 
 class Order(models.Model):
     client = models.CharField(max_length=200)
@@ -484,7 +505,7 @@ class Piece(models.Model):
         return self.copies - self.completed_pieces - self.pending_pieces
 
     def get_deadline_from_now(self):
-        return  (self.order.due_date - timezone.localdate()).total_seconds()
+        return (self.order.due_date - timezone.localdate()).total_seconds()
 
     def quote_ready(self):
         if self.stl is not None:
@@ -567,3 +588,39 @@ class PrintJob(models.Model):
     def pending(self):
         return self.printing or self.awaiting_for_bed_removal
 
+
+# Scheduler models
+
+class Schedule(models.Model):
+    created = models.DateTimeField(default=timezone.now)
+    finished = models.DateTimeField(null=True)
+    # We use ortools status definition
+    status = models.IntegerField(null=True)
+    launched_tasks = models.ManyToManyField(OctoprintTask)
+    celery_id = models.CharField(max_length=200, null=True)
+
+    def print_schedule(self):
+        lines = []
+        for m in Printer.objects.all():
+            # We sort task by start time
+            order = lambda x: x.start
+            queue = [entry for entry in self.entries.all() if entry.printer == m]
+            queue.sort(key=order)
+            lines.append("Machine {} schedule:".format(m.id))
+            for t in queue:
+                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=t.id,
+                                                                                                   start=t.start,
+                                                                                                   end=t.end,
+                                                                                                   deadline=t.deadline))
+        return lines
+
+
+class ScheduleEntry(models.Model):
+    schedule = models.ForeignKey(Schedule, on_delete=models.CASCADE, related_name='entries')
+    printer = models.ForeignKey(Printer, on_delete=models.CASCADE)
+    # The schedule entry might be an octoprint task or a piece
+    piece = models.ForeignKey(Piece, on_delete=models.CASCADE, null=True)
+    task = models.ForeignKey(OctoprintTask, on_delete=models.CASCADE, null=True)
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+    deadline = models.DateTimeField()

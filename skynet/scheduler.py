@@ -6,6 +6,7 @@ import skynet.models as skynet_models
 from django.conf import settings
 import datetime
 import pytz
+from django.utils import timezone
 
 '''
 El Scheduler planifica las tareas de poma, y corre periodicamente. En lineas generales, realiza lo siguiente
@@ -80,6 +81,10 @@ def get_formatted_forbidden_bounds(horizon):
             bounds += [fzones[i].end, fzones[i+1].start]
     return bounds
 
+def relative_to_absolute_date(s):
+    tzinfo = pytz.timezone(settings.TIME_ZONE)
+    now = datetime.datetime.now(tz=tzinfo)
+    return now + datetime.timedelta(seconds=s)
 
 @shared_task(queue='celery')
 def poma_scheduler():
@@ -199,28 +204,48 @@ def poma_scheduler():
 
         model.Minimize(obj_var)
 
+        # Database model creation
+        schedule = skynet_models.Schedule.objects.create()
+
         # Solve model.
         solver = cp_model.CpSolver()
         status = solver.Solve(model)
         print('Model validated: {}'.format(status == cp_model.OPTIMAL))
-        if status == cp_model.OPTIMAL:
-            for m in range(machines_count):
-                # We sort task by start time
-                order = lambda x: solver.Value(x.start)
-                queue = [task for task in all_tasks if solver.Value(task.machine) == m]
-                queue.sort(key=order)
-                print("Machine {} schedule:".format(m))
-                for t in queue:
-                    print("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=t.id,
-                                                                                                start=round(float(solver.Value(t.start))/3600,2),
-                                                                                                end=round(float(solver.Value(t.end))/3600,2),
-                                                                                                deadline=round(float(t.data.deadline)/3600,2)))
-        elif status == cp_model.MODEL_INVALID:
-            print(model.Validate())
-            print(model.ModelStats())
 
-        else:
-            print(status)
+        # We are ready! Finally, we save the results
+        schedule.status = status
+        schedule.finished = timezone.now()
+        schedule.save()
+        if not status == cp_model.OPTIMAL:
+            if status == cp_model.MODEL_INVALID:
+                print(model.Validate())
+                print(model.ModelStats())
+            # TODO : Handlear mejor el caso de que la optimizacion no tenga solucion, alivinanando constrains a cambio de una penalizacion
+            return False
+
+        for m in range(machines_count):
+            # We sort task by start time
+            order = lambda x: solver.Value(x.start)
+            queue = [task for task in all_tasks if solver.Value(task.machine) == m]
+            queue.sort(key=order)
+            print("Machine {} schedule:".format(m))
+            for t in queue:
+                print("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=t.id,
+                                                                                            start=round(float(solver.Value(t.start))/3600,2),
+                                                                                            end=round(float(solver.Value(t.end))/3600,2),
+                                                                                            deadline=round(float(t.data.deadline)/3600,2)))
+        for task in all_tasks:
+            o = skynet_models.ScheduleEntry.objects.create(schedule=schedule,
+                                                           printer=skynet_models.Printer.objects.get(id=machines_corresp_to_db[solver.Value(task.machine)]),
+                                                           start=relative_to_absolute_date(solver.Value(task.start)),
+                                                           end=relative_to_absolute_date(solver.Value(task.end)),
+                                                           deadline=relative_to_absolute_date(task.data.deadline))
+
+            if 'OT' in str(task.id):
+                o.task = skynet_models.OctoprintTask.objects.get(id=task.id[2:])
+            else:
+                o.piece = skynet_models.Piece.objects.get(id=task.id)
+            o.save()
 
 
 
