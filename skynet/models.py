@@ -482,8 +482,8 @@ class Piece(models.Model):
     print_settings = models.ForeignKey('slaicer.PrintProfile', on_delete=models.SET_NULL, blank=True, null=True)
     copies = models.IntegerField(default=1)
     scale = models.FloatField(default=1.0)
-    material = models.ManyToManyField(Material)
-    color = models.ManyToManyField(Color)
+    materials = models.ManyToManyField(Material)
+    colors = models.ManyToManyField(Color)
     # Used to mark the piece as canceled
     cancelled = models.BooleanField(default=False)
     # You need to specify a model or a Gcode (but not both). The field is called stl for historical reasons, but it supports obj too
@@ -529,6 +529,17 @@ class Piece(models.Model):
         else:
             return self.gcode.weight
 
+    def check_for_filament_compatibility(self, filament):
+        return filament.color in self.colors.all() and filament.material in self.materials.all()
+
+    def select_filaments(self):
+        candidates = [filament for filament in Filament.objects.all() if self.check_for_filament_compatibility(filament)]
+        if len(candidates) > 0:
+            # TODO: Select filament based on stock
+            return candidates[0]
+        else:
+            return None
+
 
 @receiver(pre_save, sender=Piece)
 def validate_piece(sender, instance, update_fields, **kwargs):
@@ -536,7 +547,7 @@ def validate_piece(sender, instance, update_fields, **kwargs):
     if (instance.stl is None and instance.gcode is None) or (instance.stl is not None and instance.gcode is not None):
         raise ValidationError("Please set piece gcode OR stl")
     # We need at least a color and a material
-    if len(instance.color.count()) == 0 or len(instance.material.count()) == 0:
+    if len(instance.colors.count()) == 0 or len(instance.materials.count()) == 0:
         raise ValidationError("Please select at least a color and a material")
 
 
@@ -608,10 +619,10 @@ class Schedule(models.Model):
             queue.sort(key=order)
             lines.append("Machine {} schedule:".format(m.id))
             for t in queue:
-                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=t.id,
-                                                                                                   start=t.start,
-                                                                                                   end=t.end,
-                                                                                                   deadline=t.deadline))
+                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline".format(id="{:03d}".format(t.id),
+                                                                                                   start=t.start.strftime("%m/%d, %H:%M"),
+                                                                                                   end=t.end.strftime("%m/%d, %H:%M"),
+                                                                                                   deadline=t.deadline.strftime("%m/%d, %H:%M")))
         return lines
 
 
