@@ -235,8 +235,7 @@ class OctoprintTask(models.Model):
 
     @property
     def dependencies_ready(self):
-        return (
-                    self.dependency.dependencies_ready and self.dependency.finished) if self.dependency is not None else True
+        return (self.dependency.dependencies_ready and self.dependency.finished) if self.dependency is not None else True
 
     def get_file(self):
         if self.type == 'job':
@@ -491,6 +490,9 @@ class Piece(models.Model):
     gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
     # Slaicer models reference
     quote = models.ForeignKey(SliceJob, on_delete=models.CASCADE, null=True, blank=True)
+    # Used to track slaicer results, filled automatically
+    auto_print_profile = models.BooleanField(default=True)
+    auto_support = models.BooleanField(default=True)
 
     @property
     def completed_pieces(self):
@@ -532,7 +534,7 @@ class Piece(models.Model):
     def check_for_filament_compatibility(self, filament):
         return filament.color in self.colors.all() and filament.material in self.materials.all()
 
-    def select_filaments(self):
+    def select_filament(self):
         candidates = [filament for filament in Filament.objects.all() if self.check_for_filament_compatibility(filament)]
         if len(candidates) > 0:
             # TODO: Select filament based on stock
@@ -549,6 +551,9 @@ def validate_piece(sender, instance, update_fields, **kwargs):
     # We need at least a color and a material
     if len(instance.colors.count()) == 0 or len(instance.materials.count()) == 0:
         raise ValidationError("Please select at least a color and a material")
+    # We set slaicer flags according to profile choose
+    if instance.print_settings is None:
+        instance.auto_print_profile = True
 
 
 @receiver(post_save, sender=Piece)

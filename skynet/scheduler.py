@@ -7,6 +7,7 @@ from django.conf import settings
 import datetime
 import pytz
 from django.utils import timezone
+from slaicer.models import SliceJob, SliceConfiguration
 
 '''
 El Scheduler planifica las tareas de poma, y corre periodicamente. En lineas generales, realiza lo siguiente
@@ -21,6 +22,7 @@ Actualmente, los constains que considera son:
 3) Posibilidad de imprimir en determinada impresora
 '''
 
+# Scheduler auxiliary functions definition
 
 def print_piece_on_printer_check(piece, printer):
     # Size check - only for GM
@@ -81,13 +83,16 @@ def get_formatted_forbidden_bounds(horizon):
             bounds += [fzones[i].end, fzones[i+1].start]
     return bounds
 
+
 def relative_to_absolute_date(s):
     tzinfo = pytz.timezone(settings.TIME_ZONE)
     now = datetime.datetime.now(tz=tzinfo)
     return now + datetime.timedelta(seconds=s)
 
-@shared_task(queue='celery')
-def poma_scheduler():
+# Scheduler function definition. The result is a Schedule instance
+
+@shared_task(bind=True, queue='celery')
+def poma_scheduler(self):
         # Pending pieces
         pending_pieces = []
         for p in skynet_models.Piece.objects.all():
@@ -205,7 +210,7 @@ def poma_scheduler():
         model.Minimize(obj_var)
 
         # Database model creation
-        schedule = skynet_models.Schedule.objects.create()
+        schedule = skynet_models.Schedule.objects.create(celery_id=self.request.id)
 
         # Solve model.
         solver = cp_model.CpSolver()
@@ -247,6 +252,91 @@ def poma_scheduler():
                 o.piece = skynet_models.Piece.objects.get(id=task.id)
             o.save()
 
+        return schedule.id
 
 
+'''
+Task dispatcher
+'''
+
+@shared_task(queue='celery')
+def poma_dispatcher(sid):
+    tzinfo = pytz.timezone(settings.TIME_ZONE)
+    now = datetime.datetime.now(tz=tzinfo)
+    try:
+        schedule = skynet_models.Schedule.objects.get(id=sid)
+    except skynet_models.Schedule.DoesNotExist:
+        return False
+    # We look for taks that start now
+    pending_tasks = [entry for entry in schedule.entries if entry.start < now and entry.piece is not None]
+    pending_printers = list(set([entry.printer for entry in pending_tasks]))
+    if len(pending_tasks) != len(pending_printers):
+        raise ValueError('Task and manchines length mismatch')
+    #  We try to swap schedules across different printers, in order to avoid a filament change
+    for entry in pending_tasks:
+        for printer in pending_printers:
+            if entry.piece.check_for_filament_compatibility(printer.filament):
+                # Ok, we would like to print this piece in this printer
+                target_entry = [entry for entry in pending_tasks if entry.printer == printer][0]
+                target_printer = printer
+                if entry == target_entry:
+                    pass
+                else:
+                    # We check if we can swap the schedules
+                    swap_possible = print_piece_on_printer_check(entry.piece, target_printer) and print_piece_on_printer_check(target_entry.piece, entry.printer)
+                    target_with_correct_filament = target_entry.piece.check_for_filament_compatibility(target_printer.filament)
+                    if swap_possible and not target_with_correct_filament:
+                        entry_old_printer_id = entry.printer.id
+                        # We make the swap
+                        entry.printer = target_printer
+                        target_entry.printer = skynet_models.Printer.objects.get(id=entry_old_printer_id)
+                        entry.save()
+                        target_entry.save()
+                break
+    # Ready to go!
+    for entry in pending_tasks:
+        printer = entry.printer
+        piece = entry.piece
+        filament = printer.filament if piece.check_for_filament_compatibility(printer.filament) else piece.select_filament()
+        if filament is None:
+            # We don't have any available filament
+            continue
+        # In case we don't have a gcode, we enqueue the slicing task
+        if piece.stl is not None:
+            profile = SliceConfiguration.objects.create(printer=printer.printer_type,
+                                                        material=filament.material.profile,
+                                                        print=piece.print_settings,
+                                                        auto_print_profile=piece.auto_print_profile,
+                                                        auto_support=piece.auto_support)
+            slicejob = SliceJob.objects.create(save_gcode=True)
+            slicejob.geometry_models.add(piece.stl)
+            profile.job = slicejob
+            profile.save()
+            slicejob.launch_task()
+        elif piece.gcode is not None:
+            gcode = piece.gcode
+        else:
+            piece.cancelled = True
+            piece.save()
+            raise ValueError('Invalid piece, this should be prevented by model validation')
+
+        # Prepare filament and send task
+        ## DRY ;)
+        gcode = gcode if 'gcode' in locals() else None
+        slicejob = slicejob if 'slicejob' in locals() else None
+
+        if filament == printer.filament:
+            task = printer.connection.create_task(slicejob=slicejob, gcode=gcode)
+        else:
+            fc = skynet_models.FilamentChange.objects.issue_change_and_start_task(new_filament=filament,
+                                                                             connection=printer.connection,
+                                                                             slicejob=slicejob,
+                                                                             gcode=gcode)
+            task = fc.task.dependencies.first()
+        # All set, we save the launched task in the schedule
+        schedule.launched_tasks.add(task)
+
+
+def scheduler_dispatcher_chain():
+    return poma_scheduler.s() | poma_dispatcher()
 

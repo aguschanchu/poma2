@@ -1,5 +1,6 @@
 from django.contrib import admin
 from skynet.models import *
+from django.utils.html import format_html_join, format_html
 
 # Register your models here.
 
@@ -157,3 +158,28 @@ class PrintJobAdmin(admin.ModelAdmin):
 
     printing.boolean = True
     awaiting_for_bed_removal.boolean = True
+
+
+@admin.register(Schedule)
+class ScheduleAdmin(admin.ModelAdmin):
+    list_display = ('id', 'created', 'launched_tasks_count', 'processing_time', 'status')
+    readonly_fields = ('print_schedule_disp',)
+
+    def launched_tasks_count(self, obj):
+        return obj.launched_tasks.count()
+
+    def processing_time(self, obj):
+        return (obj.finished - obj.created).total_seconds() if obj.finished is not None else None
+
+    def print_schedule_disp(self, obj):
+        s = ''
+        for line in obj.print_schedule():
+            if 'Machine' in line:
+                s += '<b>{}</b>'.format(line)
+            else:
+                s += line
+            s += '<br>'
+        return format_html(s)
+
+
+

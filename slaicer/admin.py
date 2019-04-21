@@ -144,3 +144,4 @@ class SliceConfigurationAdmin(admin.ModelAdmin):
     list_display = ('id', 'quoting_profile')
 
     list_filter = ('quoting_profile',)
+
