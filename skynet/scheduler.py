@@ -259,12 +259,14 @@ def poma_scheduler(self):
 Task dispatcher
 '''
 
-@shared_task(queue='celery')
-def poma_dispatcher(sid):
+@shared_task(queue='celery', bind=True)
+def poma_dispatcher(self, sid):
     tzinfo = pytz.timezone(settings.TIME_ZONE)
     now = datetime.datetime.now(tz=tzinfo)
     try:
         schedule = skynet_models.Schedule.objects.get(id=sid)
+        schedule.dispatcher_celery_id = self.request.id
+        schedule.save()
     except skynet_models.Schedule.DoesNotExist:
         return False
     # We look for taks that start now
@@ -339,4 +341,10 @@ def poma_dispatcher(sid):
 
 def scheduler_dispatcher_chain():
     return poma_scheduler.s() | poma_dispatcher()
+
+@shared_task(queue='celery')
+def scheduler_service():
+    # Sends scheduler task periodically
+    if skynet_models.Schedule.objects.last().ready():
+        scheduler_dispatcher_chain().apply_async()
 

@@ -614,6 +614,20 @@ class Schedule(models.Model):
     status = models.IntegerField(null=True)
     launched_tasks = models.ManyToManyField(OctoprintTask)
     celery_id = models.CharField(max_length=200, null=True)
+    dispatcher_celery_id = models.CharField(max_length=200, null=True)
+
+    @property
+    def schedule_ready(self):
+        return AsyncResult(self.celery_id).ready() if self.celery_id is not None else False
+
+    @property
+    def dispatcher_ready(self):
+        return AsyncResult(self.dispatcher_celery_id).ready() if self.dispatcher_celery_id is not None else False
+
+
+    def ready(self):
+        return self.dispatcher_ready and self.schedule_ready
+
 
     def print_schedule(self):
         lines = []
@@ -629,6 +643,7 @@ class Schedule(models.Model):
                                                                                                    end=t.end.strftime("%m/%d, %H:%M"),
                                                                                                    deadline=t.deadline.strftime("%m/%d, %H:%M")))
         return lines
+
 
 
 class ScheduleEntry(models.Model):
