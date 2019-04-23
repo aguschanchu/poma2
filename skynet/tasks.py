@@ -183,9 +183,9 @@ def send_octoprint_task(task_id):
             task.save()
             task.connection.update_status()
     ## The printer should be working by now. Let's check for job completion
-    if not task.job_filename == task.connection.status.job.name:
+    if not task.job_filename.split('/')[-1] == task.connection.status.job.name:
         raise ValueError("Incorrect job name. Printer was manually controlled, so, we lost job tracking")
-    if task.connection.status.printing:
+    if task.connection.status.printing or task.connection.status.paused:
         raise PrintNotFinished
     else:
         return True

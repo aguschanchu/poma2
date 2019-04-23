@@ -72,7 +72,6 @@ class MaterialBrand(models.Model):
 # Filament Model
 
 class Filament(models.Model):
-    name = models.CharField(max_length=200, blank=True)
     sku = models.CharField(max_length=200)
     brand = models.ForeignKey(MaterialBrand, on_delete=models.CASCADE)
     color = models.ForeignKey(Color, on_delete=models.CASCADE)
@@ -83,6 +82,10 @@ class Filament(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def name(self):
+        return '{color} - {material}'.format(color=self.color, material=self.material)
 
     def get_bed_temperature(self):
         return self.bed_temperature if self.bed_temperature is not None else self.material.profile.bed_temperature
@@ -118,8 +121,8 @@ class FilamentChangeManager(models.Manager):
 
     def issue_change_and_start_task(self, new_filament, connection, commands=None, file=None, slicejob=None):
         # We create the ChangeFilament task
-        cf_task = self.issue_change(new_filament=new_filament, connectionn=connection)
-        p_task = connection.create_task(commands=commands, file=file, slicejob=slicejob, dependency=cf_task)
+        cf_task = self.issue_change(new_filament=new_filament, connection=connection)
+        p_task = connection.create_task(commands=commands, file=file, slicejob=slicejob, dependency=cf_task.task)
         return cf_task
 
 
@@ -150,7 +153,7 @@ def update_printer_filament_on_confirmation(sender, instance, update_fields, **k
 class OctoprintTaskManager(models.Manager):
     def create_task(self, connection, commands=None, file=None, slicejob=None, dependency=None):
         # It's a valid task?
-        if len([x for x in [connection, commands, file] if x is not None]) == 1:
+        if len([x for x in [slicejob, commands, file] if x is not None]) != 1:
             raise ValidationError("Please specify a command or a file or a slicejob")
         if file is not None:
             file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode'
@@ -389,7 +392,7 @@ class OctoprintConnection(models.Model):
             self.status.save()
 
     def create_task(self, commands=None, file=None, slicejob=None, dependency=None):
-        return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=None)
+        return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=dependency)
 
 
 @receiver(pre_save, sender=OctoprintConnection)

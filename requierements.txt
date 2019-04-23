@@ -9,5 +9,5 @@ django_nose
 woocommerce
 psycopg2-binary
 transforms3d
-prettyjson
+django-prettyjson
 ortools

@@ -50,6 +50,10 @@ class FilamentAdmin(admin.ModelAdmin):
             current_stock += purchase.quantity
         return current_stock
 
+    def name(self, obj):
+        return obj.name
+
+
 
 class PieceAdmin(admin.ModelAdmin):
     list_display = ('order', 'scale', 'copies',  'stl', 'build_time', 'weight')

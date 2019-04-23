@@ -105,16 +105,9 @@ def poma_scheduler(self):
         # Machines
         available_machines = [p for p in skynet_models.Printer.objects.all() if p.printer_enabled]
         machines_count = len(available_machines)
-        tasks_count = len(tasks_data)
 
         # Create the model.
         model = cp_model.CpModel()
-
-        # Horizon definition
-        horizon = sum([t.processing_time for t in tasks_data])
-
-        # Forbidden zones definition
-        bounds = get_formatted_forbidden_bounds(horizon)
 
         # Machines queue definition
         machines_queue = {}
@@ -130,6 +123,13 @@ def poma_scheduler(self):
                 if not at.finished:
                     tasks_data.append(task_data_type('OT{}'.format(at.id), int(at.time_left), int(at.time_left), [x for x in machines_corresp_to_db.keys() if machines_corresp_to_db[x] == m.id][0]))
                     pass
+
+        # Horizon definition
+        horizon = sum([t.processing_time for t in tasks_data])
+        tasks_count = len(tasks_data)
+
+        # Forbidden zones definition
+        bounds = get_formatted_forbidden_bounds(horizon)
 
         print(tasks_data)
         # Tasks creation
@@ -225,6 +225,11 @@ def poma_scheduler(self):
             if status == cp_model.MODEL_INVALID:
                 print(model.Validate())
                 print(model.ModelStats())
+            if status == cp_model.INFEASIBLE:
+                print("Infeasible schedule")
+                print("Available printers: {machines_count}\nTasks: {tasks_count}\nHorizon: {horizon}".format(machines_count=machines_count,
+                                                                                                              tasks_count=tasks_count,
+                                                                                                              horizon=horizon//3600))
             # TODO : Handlear mejor el caso de que la optimizacion no tenga solucion, alivinanando constrains a cambio de una penalizacion
             return False
 
@@ -269,9 +274,10 @@ def poma_dispatcher(self, sid):
         schedule.save()
     except skynet_models.Schedule.DoesNotExist:
         return False
-    # We look for taks that start now
-    pending_tasks = [entry for entry in schedule.entries if entry.start < now and entry.piece is not None]
+    # We look for tasks that start now
+    pending_tasks = [entry for entry in schedule.entries.all() if entry.start < now and entry.piece is not None]
     pending_printers = list(set([entry.printer for entry in pending_tasks]))
+    print(pending_tasks)
     if len(pending_tasks) != len(pending_printers):
         raise ValueError('Task and manchines length mismatch')
     #  We try to swap schedules across different printers, in order to avoid a filament change
@@ -328,15 +334,18 @@ def poma_dispatcher(self, sid):
         slicejob = slicejob if 'slicejob' in locals() else None
 
         if filament == printer.filament:
-            task = printer.connection.create_task(slicejob=slicejob, gcode=gcode)
+            task = printer.connection.create_task(slicejob=slicejob, file=gcode)
         else:
             fc = skynet_models.FilamentChange.objects.issue_change_and_start_task(new_filament=filament,
                                                                              connection=printer.connection,
                                                                              slicejob=slicejob,
-                                                                             gcode=gcode)
+                                                                             file=gcode)
             task = fc.task.dependencies.first()
         # All set, we save the launched task in the schedule
         schedule.launched_tasks.add(task)
+        # We create the asocciated PrintJob
+        print_job = skynet_models.PrintJob.objects.create(task=task, filament=filament)
+        skynet_models.UnitPiece.objects.create(piece=piece, job=print_job)
 
 
 def scheduler_dispatcher_chain():

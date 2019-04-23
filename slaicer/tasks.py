@@ -87,7 +87,10 @@ class ModelNotReady(Exception):
 
 @shared_task(queue='celery', autoretry_for=(ModelNotReady,), max_retries=60, default_retry_delay=2)
 def slice_model(slicejob_id):
-    slicejob = modelos.SliceJob.objects.get(id=slicejob_id)
+    try:
+        slicejob = modelos.SliceJob.objects.get(id=slicejob_id)
+    except modelos.SliceJob.DoesNotExist:
+        raise ModelNotReady
     models = slicejob.geometry_models.all()
 
     # Are all the models ready?
