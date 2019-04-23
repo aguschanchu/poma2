@@ -19,7 +19,6 @@ def site_config(Site):
                                                                                                'protocol': settings.CURRENT_PROTOCOL,
                                                                                                'port': settings.CURRENT_PORT}))
 
-
 def check_for_lib():
     global os, warnings
     if not os.path.isdir('slaicer/lib'):

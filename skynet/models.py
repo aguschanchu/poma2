@@ -5,9 +5,7 @@ from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError
 from urllib.parse import urljoin
-
 urllib3.disable_warnings()
-from celery.result import AsyncResult
 from django.utils import timezone
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
@@ -21,6 +19,8 @@ from datetime import timedelta
 from slaicer.models import *
 from skynet.tasks import quote_gcode
 from django.core.files.base import ContentFile
+from django_celery_results.models import TaskResult
+from celery import states
 
 '''
 Materials and colors model definition
@@ -186,10 +186,7 @@ class OctoprintTask(models.Model):
 
     @property
     def status(self):
-        if self.celery_id is None:
-            return 'PENDING'
-        else:
-            return AsyncResult(self.celery_id).state
+        return 'PENDING' if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status
 
     @property
     def slice_job_ready(self):
@@ -205,7 +202,8 @@ class OctoprintTask(models.Model):
         if self.celery_id is None:
             return False
         else:
-            return AsyncResult(self.celery_id).ready()
+            return False if self.celery_id is None else TaskResult.objects.filter(
+                task_id=self.celery_id).last().status in states.READY_STATES
 
     @property
     def awaiting_for_human_intervention(self):
@@ -459,7 +457,7 @@ class Gcode(models.Model):
     celery_id = models.CharField(max_length=200, null=True, blank=True)
 
     def ready(self):
-        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
 
 
 # Order Models
@@ -548,9 +546,6 @@ def validate_piece(sender, instance, update_fields, **kwargs):
     # We need an STL or a Gcode, but not both
     if (instance.stl is None and instance.gcode is None) or (instance.stl is not None and instance.gcode is not None):
         raise ValidationError("Please set piece gcode OR stl")
-    # We need at least a color and a material
-    if len(instance.colors.count()) == 0 or len(instance.materials.count()) == 0:
-        raise ValidationError("Please select at least a color and a material")
     # We set slaicer flags according to profile choose
     if instance.print_settings is None:
         instance.auto_print_profile = True
@@ -618,11 +613,11 @@ class Schedule(models.Model):
 
     @property
     def schedule_ready(self):
-        return AsyncResult(self.celery_id).ready() if self.celery_id is not None else False
+        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
 
     @property
     def dispatcher_ready(self):
-        return AsyncResult(self.dispatcher_celery_id).ready() if self.dispatcher_celery_id is not None else False
+        return False if self.dispatcher_celery_id is None else TaskResult.objects.filter(task_id=self.dispater_celery_id).last().status in states.READY_STATES
 
 
     def ready(self):

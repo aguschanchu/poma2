@@ -9,7 +9,6 @@ from . import tasks
 import os
 import string
 import random
-from celery.result import AsyncResult
 from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError, TimeoutError
@@ -18,6 +17,8 @@ from django.dispatch import receiver
 from django.core.exceptions import ValidationError
 from django.forms.models import model_to_dict
 from django.apps import apps
+from django_celery_results.models import TaskResult
+from celery import states
 
 '''
 Los siguientes modelos, corresponden a un los 3 settings requeridos por Slic3r para hacer un trabajo. A saber, parametros
@@ -142,7 +143,7 @@ class TweakerResult(models.Model):
                                           on_delete=models.CASCADE)
 
     def ready(self):
-        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
 
     @property
     def support_needed(self):
@@ -159,7 +160,7 @@ class GeometryResult(models.Model):
                                           on_delete=models.CASCADE)
 
     def ready(self):
-        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
 
 
 class GeometryModelManager(models.Manager):
@@ -312,7 +313,7 @@ class SliceJob(models.Model):
         return True if self.profile.print is None else False
 
     def ready(self):
-        return False if self.celery_id is None else AsyncResult(self.celery_id).ready()
+        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
     def launch_task(self):
         if not hasattr(self, 'profile'):
