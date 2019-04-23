@@ -21,12 +21,14 @@ class Attribute(models.Model):
     uuid = models.IntegerField(primary_key=True)
     slug = models.CharField(max_length=200)
 
+    @property
     def influences_color(self):
         for term in self.terms.all():
             if term.color_implications.all():
                 return True
         return False
 
+    @property
     def influences_material(self):
         for term in self.terms.all():
             if term.material_implications.all():
@@ -44,7 +46,7 @@ class AttributeTerm(models.Model):
     and material_implications indicate color and materials, respectively, compatible with the corresponding attribute value, if any.
     """
     attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE, related_name='terms')
-    uuid = models.IntegerField(blank=True, null=True)
+    uuid = models.IntegerField(blank=True, null=True, primary_key=True)
     option = models.CharField(max_length=200)
     color_implications = models.ManyToManyField(Color, blank=True)
     material_implications = models.ManyToManyField(Material, blank=True)
@@ -118,7 +120,7 @@ class Order(models.Model):
     Model for an order made through WooCommerce. Items in the order are accessible through self.items
     """
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders')
-    uuid = models.IntegerField()
+    uuid = models.IntegerField(primary_key=True)
 
 class OrderItem(models.Model):
     """

@@ -34,7 +34,7 @@ class WoocommerceAttributes(APIView):
                         wc_api=True, version="wc/v2")
 
             # Get list of attributes in WooCommerce
-            attributes = wcapi.get("products/attributes").json()
+            attributes = wcapi.get("products/attributes?per_page=100").json()
             for attribute in attributes:
                 # If attribute does not exist, add it
                 try:
@@ -43,7 +43,7 @@ class WoocommerceAttributes(APIView):
                     current_attribute = Attribute(name=attribute['name'], uuid=attribute['id'], slug=attribute['slug'])
                     current_attribute.save()
                 # Get list of attribute terms
-                attribute_terms = wcapi.get(f"products/attributes/{attribute['id']}/terms").json()
+                attribute_terms = wcapi.get(f"products/attributes/{attribute['id']}/terms?per_page=100").json()
                 for term in attribute_terms:
                     # If term does not exist, add it
                     try:
@@ -103,23 +103,3 @@ class WooCommerceOrder(APIView):
         except Exception as e:
             print(e)
             return Response(status=status.HTTP_400_BAD_REQUEST)
-
-# class SerializeProduct(APIView):
-#
-#     def get(self, request, format=None):
-#         try:
-#             product = Product.objects.get(name='Luna 140mm')
-#             serializer = ProductSerializer(product)
-#             return Response(serializer.data)
-#         except:
-#             return Response(status=status.HTTP_400_BAD_REQUEST)
-#
-#     def post(self, request, format=None):
-#         try:
-#             serializer = ProductSerializer(data=request.data, many=True)
-#             if serializer.is_valid():
-#                 print(serializer.validated_data)
-#                 serializer.save()
-#             return Response(status=status.HTTP_200_OK)
-#         except:
-#             return Response(status=status.HTTP_400_BAD_REQUEST)

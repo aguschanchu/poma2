@@ -25,6 +25,16 @@ class AttributeTermSerializer(serializers.ModelSerializer):
         model = AttributeTerm
         fields = ('id', 'name', 'option')
 
+    def to_internal_value(self, data):
+        if 'name' not in data:
+            try:
+                name = Attribute.objects.get(uuid = data['id']).name
+                data['name'] = name
+            except Exception as e:
+                print(e)
+                data['name'] = ''
+        return super(AttributeTermSerializer, self).to_internal_value(data)
+
 class ProductSerializer(serializers.ModelSerializer):
     """
     Serializer fot the Product class. Property 'product_id' is encoded as 'id'. Create method is overwritten
