@@ -159,12 +159,12 @@ class OctoprintTaskManager(models.Manager):
             file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode'
             o = self.create(type='job', connection=connection)
             o.file.save(file_name, file)
-        if commands is not None:
+        elif commands is not None:
             # So, it's a command task. Before, we check if the object received is a file, or just a string
             if hasattr(commands, 'open'):
                 commands = commands.open('r').read()
             o = self.create(type='command', commands=commands, connection=connection)
-        else:
+        elif slicejob is not None:
             o = self.create(type='slice-and-print-job', slicejob=slicejob, connection=connection, dependency=dependency)
         return o
 

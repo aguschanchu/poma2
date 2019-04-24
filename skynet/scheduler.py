@@ -93,14 +93,15 @@ def relative_to_absolute_date(s):
 
 @shared_task(bind=True, queue='celery')
 def poma_scheduler(self):
+        # Data type definition used for scheduling
+        task_data_type = collections.namedtuple('task_data', 'piece_id processing_time deadline copy processing_on')
+        tasks_data = []
+
         # Pending pieces
-        pending_pieces = []
         for p in skynet_models.Piece.objects.all():
             if p.quote_ready() and not p.cancelled:
-                pending_pieces += [p for x in range(0, p.queued_pieces)]
-
-        task_data_type = collections.namedtuple('task_data', 'id processing_time deadline processing_on')
-        tasks_data = [task_data_type(p.id, int(p.get_build_time()), int(p.get_deadline_from_now()), None) for p in pending_pieces]
+                for copy in range(0, p.queued_pieces):
+                    tasks_data.append(task_data_type(p.id, int(p.get_build_time()), int(p.get_deadline_from_now()), copy, None))
 
         # Machines
         available_machines = [p for p in skynet_models.Printer.objects.all() if p.printer_enabled]
@@ -138,27 +139,27 @@ def poma_scheduler(self):
         all_tasks = []
         task_queue = {}
 
-        for task in tasks_data:
-            start_var = model.NewIntVar(0, horizon, 'start_{id}'.format(id=task.id))
-            end_var = model.NewIntVar(0, horizon, 'end_{id}'.format(id=task.id))
-            interval = model.NewIntervalVar(start_var, task.processing_time, end_var, 'interval_{id}'.format(id=task.id))
-            machine_var = model.NewIntVar(0, machines_count, 'machine_{id}'.format(id=task.id))
-            all_tasks.append(task_type(id=task.id, data=task, start=start_var, end=end_var, interval=interval, machine=machine_var))
+        for id, task in enumerate(tasks_data):
+            start_var = model.NewIntVar(0, horizon, 'start_{id}'.format(id=id))
+            end_var = model.NewIntVar(0, horizon, 'end_{id}'.format(id=id))
+            interval = model.NewIntervalVar(start_var, task.processing_time, end_var, 'interval_{id}'.format(id=id))
+            machine_var = model.NewIntVar(0, machines_count, 'machine_{id}'.format(id=id))
+            all_tasks.append(task_type(id=id, data=task, start=start_var, end=end_var, interval=interval, machine=machine_var))
             # We create a copy of each interval, on each machine, as an OptionalIntervalVar, if we can print it on it
-            task_queue[task.id] = []
+            task_queue[id] = []
             for m in machines_queue.keys():
                 # Consider possible tasks and present tasks
                 ## Possible tasks
                 if task.processing_on is None:
                     # Printer compatibility check
-                    if print_piece_on_printer_check(skynet_models.Piece.objects.get(id=task.id), skynet_models.Printer.objects.get(id=machines_corresp_to_db[m])):
-                        start_var_o = model.NewIntVar(0, horizon, 'start_{id}_on_{machine}'.format(id=task.id, machine=m))
-                        end_var_o = model.NewIntVar(0, horizon, 'end_{id}_on_{machine}'.format(id=task.id, machine=m))
-                        flag = model.NewBoolVar('perform_{id}_on_{machine}'.format(id=task.id, machine=m))
-                        task_queue[task.id].append(flag)
+                    if print_piece_on_printer_check(skynet_models.Piece.objects.get(id=task.piece_id), skynet_models.Printer.objects.get(id=machines_corresp_to_db[m])):
+                        start_var_o = model.NewIntVar(0, horizon, 'start_{id}_on_{machine}'.format(id=id, machine=m))
+                        end_var_o = model.NewIntVar(0, horizon, 'end_{id}_on_{machine}'.format(id=id, machine=m))
+                        flag = model.NewBoolVar('perform_{id}_on_{machine}'.format(id=id, machine=m))
+                        task_queue[id].append(flag)
                         interval_o = model.NewOptionalIntervalVar(start_var_o, task.processing_time, end_var_o, flag,
-                                                                  'interval_{id}_on_{machine}'.format(id=task.id, machine=m))
-                        machines_queue[m].append(task_optional_type(id=task.id, start=start_var_o, end=end_var_o,
+                                                                  'interval_{id}_on_{machine}'.format(id=id, machine=m))
+                        machines_queue[m].append(task_optional_type(id=id, start=start_var_o, end=end_var_o,
                                                                     interval=interval_o, machine=m, flag=flag))
 
                         ## We only propagate the constraint if the task is performed on the machine
@@ -168,14 +169,14 @@ def poma_scheduler(self):
                 else:
                     if m == task.processing_on:
                         start_var_o = model.NewIntVar(0, horizon,
-                                                      'start_{id}_on_{machine}'.format(id=task.id, machine=m))
-                        end_var_o = model.NewIntVar(0, horizon, 'end_{id}_on_{machine}'.format(id=task.id, machine=m))
-                        flag = model.NewBoolVar('perform_{id}_on_{machine}'.format(id=task.id, machine=m))
+                                                      'start_{id}_on_{machine}'.format(id=id, machine=m))
+                        end_var_o = model.NewIntVar(0, horizon, 'end_{id}_on_{machine}'.format(id=id, machine=m))
+                        flag = model.NewBoolVar('perform_{id}_on_{machine}'.format(id=id, machine=m))
                         task_queue[task.id].append(flag)
                         interval_o = model.NewOptionalIntervalVar(start_var_o, task.processing_time, end_var_o, flag,
-                                                                  'interval_{id}_on_{machine}'.format(id=task.id,
+                                                                  'interval_{id}_on_{machine}'.format(id=id,
                                                                                                       machine=m))
-                        machines_queue[m].append(task_optional_type(id=task.id, start=start_var_o, end=end_var_o,
+                        machines_queue[m].append(task_optional_type(id=id, start=start_var_o, end=end_var_o,
                                                                     interval=interval_o, machine=m, flag=flag))
 
                         ## We only propagate the constraint if the task is performed on the machine
@@ -240,7 +241,8 @@ def poma_scheduler(self):
             queue.sort(key=order)
             print("Machine {} schedule:".format(m))
             for t in queue:
-                print("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=t.id,
+                print("Task {id} - copy {copy}: start {start} ends {end} with {deadline} deadline".format(id=t.data.piece_id,
+                                                                                            copy=t.data.copy,
                                                                                             start=round(float(solver.Value(t.start))/3600,2),
                                                                                             end=round(float(solver.Value(t.end))/3600,2),
                                                                                             deadline=round(float(t.data.deadline)/3600,2)))
@@ -251,10 +253,10 @@ def poma_scheduler(self):
                                                            end=relative_to_absolute_date(solver.Value(task.end)),
                                                            deadline=relative_to_absolute_date(task.data.deadline))
 
-            if 'OT' in str(task.id):
-                o.task = skynet_models.OctoprintTask.objects.get(id=task.id[2:])
+            if 'OT' in str(task.data.piece_id):
+                o.task = skynet_models.OctoprintTask.objects.get(id=task.data.piece_id[2:])
             else:
-                o.piece = skynet_models.Piece.objects.get(id=task.id)
+                o.piece = skynet_models.Piece.objects.get(id=task.data.piece_id)
             o.save()
 
         return schedule.id
@@ -277,7 +279,6 @@ def poma_dispatcher(self, sid):
     # We look for tasks that start now
     pending_tasks = [entry for entry in schedule.entries.all() if entry.start < now and entry.piece is not None]
     pending_printers = list(set([entry.printer for entry in pending_tasks]))
-    print(pending_tasks)
     if len(pending_tasks) != len(pending_printers):
         raise ValueError('Task and manchines length mismatch')
     #  We try to swap schedules across different printers, in order to avoid a filament change
@@ -343,7 +344,7 @@ def poma_dispatcher(self, sid):
             task = fc.task.dependencies.first()
         # All set, we save the launched task in the schedule
         schedule.launched_tasks.add(task)
-        # We create the asocciated PrintJob
+        # We create the associated PrintJob
         print_job = skynet_models.PrintJob.objects.create(task=task, filament=filament)
         skynet_models.UnitPiece.objects.create(piece=piece, job=print_job)
 

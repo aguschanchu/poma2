@@ -9,6 +9,7 @@ import random
 from django.conf import settings
 from typing import List
 from django.apps import apps
+import traceback
 
 '''
 Este archivo contiene la rutina para importar un archivo de configuracion.
@@ -23,6 +24,8 @@ def load_configuration_from_model(conf) -> configparser.ConfigParser:
     try:
         config.read(conf.file.path)
         return config
+    except configparser.MissingSectionHeaderError:
+        raise ValueError("El archivo de configuracion es invalido. Revisar que se trate de un ini bien formateado")
     except:
         # TODO: Restringir errores del ConfigParser
         raise ValueError("Error al leer archivo de configuracion")
