@@ -142,7 +142,7 @@ class FilamentChange(models.Model):
 
 
 @receiver(post_save, sender=FilamentChange)
-def update_printer_filament_on_confirmation(sender, instance, update_fields, **kwargs):
+def update_printer_filament_on_confirmation(sender, instance, created, **kwargs):
     # TODO: Tener cuidado si actualizan una instancia vieja. De todos modos, esto no deberia suceder, de modo que no es muy grave
     if instance.confirmed:
         printer = instance.task.connection.printer
@@ -387,7 +387,8 @@ class OctoprintConnection(models.Model):
                 'utf-8'))
             self.status.job.name = r['job']['file']['name']
             self.status.job.estimated_print_time = r['job']['estimatedPrintTime']
-            self.status.job.estimated_print_time_left = r['progress']['printTimeLeft']
+            if self.status.printing:
+                self.status.job.estimated_print_time_left = r['progress']['printTimeLeft']
             self.status.job.save()
         except:
             traceback.print_exc()
