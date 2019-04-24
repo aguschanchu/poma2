@@ -5,7 +5,6 @@ from urllib3.util import Retry
 from urllib3 import PoolManager, ProxyManager, Timeout
 from urllib3.exceptions import MaxRetryError
 from urllib.parse import urljoin
-urllib3.disable_warnings()
 from django.utils import timezone
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
@@ -21,6 +20,8 @@ from skynet.tasks import quote_gcode
 from django.core.files.base import ContentFile
 from django_celery_results.models import TaskResult
 from celery import states
+import pytz
+urllib3.disable_warnings()
 
 '''
 Materials and colors model definition
@@ -231,7 +232,11 @@ class OctoprintTask(models.Model):
             if self.print_job.awaiting_for_bed_removal:
                 return 60 * 15
             else:
-                return self.connection.status.job.estimated_print_time_left
+                if self.connection.status.job.estimated_print_time_left is not None:
+                    return self.connection.status.job.estimated_print_time_left
+                else:
+                    # TODO: Handle better when octoprint replies a null print_time_left
+                    return max((self.print_job.end_time - datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))).total_seconds(), 600)
         return 1
 
     @property
