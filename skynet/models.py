@@ -141,7 +141,7 @@ class FilamentChange(models.Model):
         return 15 * 60
 
 
-@receiver(pre_save, sender=FilamentChange)
+@receiver(post_save, sender=FilamentChange)
 def update_printer_filament_on_confirmation(sender, instance, update_fields, **kwargs):
     # TODO: Tener cuidado si actualizan una instancia vieja. De todos modos, esto no deberia suceder, de modo que no es muy grave
     if instance.confirmed:
@@ -291,6 +291,9 @@ class OctoprintConnection(models.Model):
     locked = models.BooleanField(default=False)
 
     # Octoprint flags
+
+    def __str__(self):
+        return self.url
 
     @staticmethod
     def _get_connection_pool():

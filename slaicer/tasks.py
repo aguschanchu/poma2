@@ -124,7 +124,7 @@ def slice_model(slicejob_id):
         print_profiles_available = slicejob.profile.printer.available_print_profiles.all()
         recommended_quality = min([p.layer_height for p in print_profiles_available],
                                   key=lambda x: abs(x - min_layer_height))
-        slicejob.profile.print = modelos.PrintProfile.objects.filter(layer_height=recommended_quality)[0]
+        slicejob.profile.print = print_profiles_available.filter(layer_height=recommended_quality)[0]
 
     if slicejob.profile.auto_support:
         support_needed = any([m.orientation.support_needed for m in models])

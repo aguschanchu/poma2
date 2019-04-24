@@ -122,8 +122,7 @@ def poma_scheduler(self):
             if m.connection.active_task is not None:
                 at = m.connection.active_task
                 if not at.finished:
-                    tasks_data.append(task_data_type('OT{}'.format(at.id), int(at.time_left), int(at.time_left), [x for x in machines_corresp_to_db.keys() if machines_corresp_to_db[x] == m.id][0]))
-                    pass
+                    tasks_data.append(task_data_type('OT{}'.format(at.id), int(at.time_left), int(at.time_left), 0, [x for x in machines_corresp_to_db.keys() if machines_corresp_to_db[x] == m.id][0]))
 
         # Horizon definition
         horizon = sum([t.processing_time for t in tasks_data])
@@ -172,7 +171,7 @@ def poma_scheduler(self):
                                                       'start_{id}_on_{machine}'.format(id=id, machine=m))
                         end_var_o = model.NewIntVar(0, horizon, 'end_{id}_on_{machine}'.format(id=id, machine=m))
                         flag = model.NewBoolVar('perform_{id}_on_{machine}'.format(id=id, machine=m))
-                        task_queue[task.id].append(flag)
+                        task_queue[id].append(flag)
                         interval_o = model.NewOptionalIntervalVar(start_var_o, task.processing_time, end_var_o, flag,
                                                                   'interval_{id}_on_{machine}'.format(id=id,
                                                                                                       machine=m))

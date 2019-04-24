@@ -313,7 +313,7 @@ class SliceJob(models.Model):
         return True if self.profile.print is None else False
 
     def ready(self):
-        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
+        return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
     def launch_task(self):
         if not hasattr(self, 'profile'):
