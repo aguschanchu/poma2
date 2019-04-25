@@ -141,6 +141,9 @@ class FilamentChange(models.Model):
         # Time that takes a filament change. The idea es to calculate this automatically, based on previous events
         return 15 * 60
 
+    def get_printer(self):
+        return self.task.connection.printer
+
 
 @receiver(post_save, sender=FilamentChange)
 def update_printer_filament_on_confirmation(sender, update_fields, instance, created, **kwargs):
@@ -402,6 +405,9 @@ class OctoprintConnection(models.Model):
             self.status.connectionError = True
             self.status.save()
 
+    def get_status(self):
+        return self.status
+
     def create_task(self, commands=None, file=None, slicejob=None, dependency=None):
         return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=dependency)
 
@@ -613,6 +619,10 @@ class PrintJob(models.Model):
     @property
     def pending(self):
         return self.printing or self.awaiting_for_bed_removal
+
+    def get_printer(self):
+        return self.task.connection.printer
+
 
 @receiver(post_save, sender=PrintJob)
 def update_printer_printjob_on_confirmation(sender, update_fields, instance, created, **kwargs):
