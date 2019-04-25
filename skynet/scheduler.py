@@ -344,7 +344,7 @@ def poma_dispatcher(self, sid):
         # All set, we save the launched task in the schedule
         schedule.launched_tasks.add(task)
         # We create the associated PrintJob
-        print_job = skynet_models.PrintJob.objects.create(task=task, filament=filament)
+        print_job = skynet_models.PrintJob.objects.create(task=task, filament=filament, estimated_end_time=entry.end)
         skynet_models.UnitPiece.objects.create(piece=piece, job=print_job)
 
 

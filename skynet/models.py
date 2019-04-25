@@ -143,12 +143,14 @@ class FilamentChange(models.Model):
 
 
 @receiver(post_save, sender=FilamentChange)
-def update_printer_filament_on_confirmation(sender, instance, created, **kwargs):
+def update_printer_filament_on_confirmation(sender, update_fields, instance, created, **kwargs):
     # TODO: Tener cuidado si actualizan una instancia vieja. De todos modos, esto no deberia suceder, de modo que no es muy grave
-    if instance.confirmed:
+    if instance.confirmed and update_fields is None:
         printer = instance.task.connection.printer
         printer.filament = instance.new_filament
         printer.save()
+        instance.confirmed_date = timezone.now()
+        instance.save(update_fields=['confirmed_date'])
 
 
 class OctoprintTaskManager(models.Manager):
@@ -236,7 +238,7 @@ class OctoprintTask(models.Model):
                     return self.connection.status.job.estimated_print_time_left
                 else:
                     # TODO: Handle better when octoprint replies a null print_time_left
-                    return max((self.print_job.end_time - datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))).total_seconds(), 600)
+                    return max((self.print_job.estimated_end_time - datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))).total_seconds(), 600)
         return 1
 
     @property
@@ -597,6 +599,7 @@ class PrintJob(models.Model):
     success = models.NullBooleanField()
     created = models.DateTimeField(default=timezone.now)
     end_time = models.DateTimeField(null=True, blank=True)
+    estimated_end_time = models.DateTimeField()
     filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
 
     @property
@@ -610,6 +613,12 @@ class PrintJob(models.Model):
     @property
     def pending(self):
         return self.printing or self.awaiting_for_bed_removal
+
+@receiver(post_save, sender=PrintJob)
+def update_printer_printjob_on_confirmation(sender, update_fields, instance, created, **kwargs):
+    if update_fields is None and instance.success is not None:
+        instance.end_time = timezone.now()
+        instance.save(update_fields=['end_time'])
 
 
 # Scheduler models
