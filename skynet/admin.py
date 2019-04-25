@@ -52,7 +52,7 @@ class FilamentAdmin(admin.ModelAdmin):
 
 
 class PieceAdmin(admin.ModelAdmin):
-    list_display = ('order', 'scale', 'copies',  'stl', 'build_time', 'weight')
+    list_display = ('order', 'copies',  'stl', 'build_time', 'weight')
 
     def build_time(self, obj):
         return obj.get_build_time()

@@ -8,7 +8,7 @@ from skynet.models import Color
 from wc_liaison.models import WcApiKey, Attribute, AttributeTerm, Product
 from urllib.parse import urlencode
 from woocommerce import API
-from wc_liaison.serializers import ProductSerializer, VariationSerializer, OrderSerializer, OrderItemSerializer
+from wc_liaison.serializers import ProductSerializer, VariationSerializer, OrderSerializer, OrderItemSerializer, AttributeSerializer, AttributeTermSerializer
 from django.conf import settings
 
 # on API Key requested to Woocommerce
@@ -34,23 +34,17 @@ class WoocommerceAttributes(APIView):
                         wc_api=True, version="wc/v2")
 
             # Get list of attributes in WooCommerce
-            attributes = wcapi.get("products/attributes?per_page=100").json()
-            for attribute in attributes:
-                # If attribute does not exist, add it
-                try:
-                    current_attribute = Attribute.objects.get(uuid=attribute['id'])
-                except:
-                    current_attribute = Attribute(name=attribute['name'], uuid=attribute['id'], slug=attribute['slug'])
-                    current_attribute.save()
-                # Get list of attribute terms
-                attribute_terms = wcapi.get(f"products/attributes/{attribute['id']}/terms?per_page=100").json()
-                for term in attribute_terms:
-                    # If term does not exist, add it
-                    try:
-                        AttributeTerm.objects.get(uuid=term['id'])
-                    except:
-                        new_term = AttributeTerm(attribute=current_attribute, uuid=term['id'], option=term['name'])
-                        new_term.save()
+            attributes_in_ecommerce = wcapi.get("products/attributes?per_page=100").json()
+            attributes = AttributeSerializer(data=attributes_in_ecommerce, many=True)
+            if attributes.is_valid():
+                attributes.save()
+                for attribute in attributes.validated_data:
+                    terms_in_ecommerce = wcapi.get(f"products/attributes/{attribute['uuid']}/terms?per_page=100").json()
+                    terms = AttributeTermSerializer(data=terms_in_ecommerce, many=True, context={'attribute_id': attribute['uuid']})
+                    if terms.is_valid():
+                        terms.save()
+                    else:
+                        print(terms.errors)
             return Response(status=status.HTTP_200_OK)
         except Exception as e:
             print(e)
@@ -77,6 +71,7 @@ class WooCommerceProduct(APIView):
                         variations.save()
                     else:
                         print(variations.errors)
+                        return  Response(status=status.HTTP_400_BAD_REQUEST)
             else:
                 print(products.errors)
                 return Response(status=status.HTTP_400_BAD_REQUEST)

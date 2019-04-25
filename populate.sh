@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 rm -r slaicer/migrations
 rm -r skynet/migrations
+rm -r wc_liaison/migrations
 
 # Media folder preparation
 mkdir media/gcode
@@ -26,5 +27,6 @@ fi
 #DB population
 python manage.py makemigrations slaicer
 python manage.py makemigrations skynet
+python manage.py makemigrations wc_liaison
 python manage.py migrate
 python populate.py

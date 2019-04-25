@@ -1,5 +1,6 @@
 from django.db import models
 from skynet.models import Gcode, Color, Material
+from slaicer.models import GeometryModel, PrintProfile
 
 # WooCommerce API Key Model
 
@@ -19,7 +20,6 @@ class Attribute(models.Model):
     """
     name = models.CharField(max_length=200)
     uuid = models.IntegerField(primary_key=True)
-    slug = models.CharField(max_length=200)
 
     @property
     def influences_color(self):
@@ -46,7 +46,7 @@ class AttributeTerm(models.Model):
     and material_implications indicate color and materials, respectively, compatible with the corresponding attribute value, if any.
     """
     attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE, related_name='terms')
-    uuid = models.IntegerField(blank=True, null=True, primary_key=True)
+    uuid = models.IntegerField(primary_key=True)
     option = models.CharField(max_length=200)
     color_implications = models.ManyToManyField(Color, blank=True)
     material_implications = models.ManyToManyField(Material, blank=True)
@@ -95,10 +95,10 @@ class Component(models.Model):
     Model for a component of a variation or a simple product in the clients' WooCommerce. Components hold the information
     for a specific file to print, such as the STL/OBJ file itself, its scale and the amount needed.
     """
-    scale = models.FloatField()
-    quantity = models.IntegerField()
-    stl = models.FileField(blank=True, null=True)
-    gcode = models.ForeignKey(Gcode, on_delete=models.CASCADE, blank=True, null=True)
+    print_settings = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True)
+    quantity = models.IntegerField(default=1)
+    stl = models.ForeignKey(GeometryModel, on_delete=models.SET_NULL, null=True, blank=True)
+    gcode = models.ForeignKey(Gcode, on_delete=models.SET_NULL, blank=True, null=True)
     variation = models.ForeignKey(Variation, on_delete=models.CASCADE, related_name='components')
 
 # WooCommerce Client Model

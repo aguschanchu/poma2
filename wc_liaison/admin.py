@@ -7,20 +7,23 @@ class WC_APIKeyAdmin(admin.ModelAdmin):
     list_display = ('url', 'consumer_key', 'consumer_secret')
 
 class AttributeAdmin(admin.ModelAdmin):
-    list_display = ('uuid', 'name', 'slug','influences_color', 'influences_material')
-    fields = ('name', 'slug', 'uuid')
+    list_display = ('uuid', 'name', 'influences_color', 'influences_material')
+    fields = ('name', 'uuid')
 
     def influences_color(self, obj):
-        for term in obj.terms.all():
-            if term.color_implications.all():
-                return True
-        return False
+        # for term in obj.terms.all():
+        #     if term.color_implications.all():
+        #         return True
+        # return False
+        return obj.influences_color
+
 
     def influences_material(self, obj):
-        for term in obj.terms.all():
-            if term.material_implications.all():
-                return True
-        return False
+        # for term in obj.terms.all():
+        #     if term.material_implications.all():
+        #         return True
+        # return False
+        return obj.influences_material
 
 class AttributeTermAdmin(admin.ModelAdmin):
     list_display = ('option', 'parent_attribute', 'color_references', 'material_references')
@@ -47,7 +50,7 @@ class VariationAdmin(admin.ModelAdmin):
         return obj.product.name
 
 class ComponentAdmin(admin.ModelAdmin):
-    list_display = ('stl', 'scale', 'quantity', 'parent_variation')
+    list_display = ('stl', 'gcode', 'quantity', 'parent_variation')
 
     def parent_variation(self, obj):
         return obj.variation.name
