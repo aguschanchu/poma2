@@ -44,11 +44,13 @@ INSTALLED_APPS = [
     'skynet.apps.SkynetConfig',
     'wc_liaison.apps.WcLiaisonConfig',
     'slaicer.apps.SlaicerConfig',
+    'overseer',
     'rest_framework',
     'django_celery_results',
     'django_celery_beat',
     'django.contrib.sites',
     'prettyjson',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -59,6 +61,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'request_logging.middleware.LoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'poma2.urls'
@@ -130,6 +134,25 @@ USE_L10N = True
 
 USE_TZ = True
 
+# Deshabilitamos CORS para facilitar el desarrollo del overseer
+CORS_ORIGIN_ALLOW_ALL = True
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'DEBUG',  # change debug level as appropiate
+            'propagate': False,
+        },
+    },
+}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/

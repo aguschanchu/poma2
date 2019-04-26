@@ -11,3 +11,5 @@ psycopg2-binary
 transforms3d
 django-prettyjson
 ortools
+django-cors-headers
+django-request-logging
