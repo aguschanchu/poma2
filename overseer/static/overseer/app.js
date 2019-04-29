@@ -86,11 +86,11 @@ app.controller('PollingPrintersController', function($http, $scope, $interval, $
                 if (status['human_int_req'] == true) {
                     updatedData[i][statusclass] = 'table-warning';
                 }
-                else if (status['printing'] == true) {
-                    updatedData[i][statusclass] = 'table-success';
-                }
                 else if (status['printer_connection_enabled'] == false){
                     updatedData[i][statusclass] = 'table-danger';
+                }
+                else if (status['printing'] == true) {
+                    updatedData[i][statusclass] = 'table-success';
                 }
                 else if (status['idle'] == true) {
                     updatedData[i][statusclass] = 'table-active';

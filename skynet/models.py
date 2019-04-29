@@ -443,6 +443,8 @@ class OctoprintConnection(models.Model):
          return True
 
     def reset_connection(self):
+        # If there is an ongoing task, we cancel it
+        self.cancel_active_task()
         fields = {'command': 'disconnect'}
         r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/connection'),
                                                 headers=self._get_connection_headers(),

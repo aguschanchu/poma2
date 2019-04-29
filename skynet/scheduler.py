@@ -125,7 +125,7 @@ def poma_scheduler(self):
                     tasks_data.append(task_data_type('OT{}'.format(at.id), int(at.time_left), int(at.time_left), 0, [x for x in machines_corresp_to_db.keys() if machines_corresp_to_db[x] == m.id][0]))
 
         # Horizon definition
-        horizon = sum([t.processing_time for t in tasks_data])
+        horizon = max(sum([t.processing_time for t in tasks_data]), 3600*24)
         tasks_count = len(tasks_data)
 
         # Forbidden zones definition
@@ -198,7 +198,6 @@ def poma_scheduler(self):
         for task_i in all_tasks:
             model.Add(task_i.end <= task_i.data.deadline)
 
-        print(bounds)
         ## Forbidden zones constrains
         for task in all_tasks:
             model.AddLinearConstraintWithBounds([(task.start, 1)], bounds)
@@ -214,6 +213,8 @@ def poma_scheduler(self):
 
         # Solve model.
         solver = cp_model.CpSolver()
+        # Solver time limit
+        solver.parameters.max_time_in_seconds = 60.0
         status = solver.Solve(model)
         print('Model validated: {}'.format(status == cp_model.OPTIMAL))
 
@@ -221,15 +222,16 @@ def poma_scheduler(self):
         schedule.status = status
         schedule.finished = timezone.now()
         schedule.save()
-        if not status == cp_model.OPTIMAL:
+        if not status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             if status == cp_model.MODEL_INVALID:
                 print(model.Validate())
                 print(model.ModelStats())
             if status == cp_model.INFEASIBLE:
                 print("Infeasible schedule")
-                print("Available printers: {machines_count}\nTasks: {tasks_count}\nHorizon: {horizon}".format(machines_count=machines_count,
+
+            print("Available printers: {machines_count}\nTasks: {tasks_count}\nHorizon: {horizon}".format(machines_count=machines_count,
                                                                                                               tasks_count=tasks_count,
-                                                                                                              horizon=horizon//3600))
+                                                                                                              horizon=horizon))
             # TODO : Handlear mejor el caso de que la optimizacion no tenga solucion, alivinanando constrains a cambio de una penalizacion
             return False
 
