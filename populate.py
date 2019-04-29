@@ -32,6 +32,13 @@ def set_octoprint_dispatcher_scheduler():
                                 name='Octoprint dispatcher',
                                 task='skynet.tasks.octoprint_task_dispatcher')
 
+def set_scheduler_keepalive():
+    global PeriodicTask, IntervalSchedule
+    schedule, created = IntervalSchedule.objects.get_or_create(every=10, period=IntervalSchedule.SECONDS)
+    PeriodicTask.objects.create(interval=schedule,
+                                name='Scheduler keepalive',
+                                task='skynet.scheduler.scheduler_service')
+
 
 if __name__ == '__main__':
     print('\n' + ('=' * 80) + '\n')

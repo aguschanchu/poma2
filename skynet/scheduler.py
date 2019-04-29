@@ -90,7 +90,6 @@ def relative_to_absolute_date(s):
     return now + datetime.timedelta(seconds=s)
 
 # Scheduler function definition. The result is a Schedule instance
-
 @shared_task(bind=True, queue='celery')
 def poma_scheduler(self):
         # Data type definition used for scheduling
@@ -350,11 +349,12 @@ def poma_dispatcher(self, sid):
 
 
 def scheduler_dispatcher_chain():
-    return poma_scheduler.s() | poma_dispatcher()
+    return poma_scheduler.s() | poma_dispatcher.s()
 
 @shared_task(queue='celery')
 def scheduler_service():
     # Sends scheduler task periodically
-    if skynet_models.Schedule.objects.last().ready():
+    last_schedule_finished = skynet_models.Schedule.objects.last().ready() if skynet_models.Schedule.objects.all().exists() else True
+    if last_schedule_finished:
         scheduler_dispatcher_chain().apply_async()
 

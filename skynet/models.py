@@ -714,6 +714,8 @@ class Schedule(models.Model):
             task_id=self.dispatcher_celery_id).first().status in states.READY_STATES
 
     def ready(self):
+        if self.status is not None and self.status != 4:
+            return True
         return self.dispatcher_ready and self.schedule_ready
 
 
@@ -726,7 +728,8 @@ class Schedule(models.Model):
             queue.sort(key=order)
             lines.append("Machine {} schedule:".format(m.id))
             for t in queue:
-                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline".format(id="{:03d}".format(t.id),
+                id = "OT{:03d}".format(t.task.id) if t.task is not None else "{:03d}".format(t.piece.id)
+                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=id,
                                                                                                    start=t.start.strftime("%m/%d, %H:%M"),
                                                                                                    end=t.end.strftime("%m/%d, %H:%M"),
                                                                                                    deadline=t.deadline.strftime("%m/%d, %H:%M")))
