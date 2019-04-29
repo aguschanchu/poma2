@@ -350,6 +350,12 @@ class OctoprintConnection(models.Model):
         else:
             raise MaxRetryError("Error sending command to instance")
 
+    def _cancel_octoprint_task(self):
+        fields = {'command': 'cancel'}
+        r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/job'),
+                                                headers=self._get_connection_headers(),
+                                                body=json.dumps(fields).encode('utf-8'))
+
     @property
     def connection_ready(self):
         return not self.locked and self.status.instance_ready
@@ -419,7 +425,7 @@ class OctoprintConnection(models.Model):
     def create_task(self, commands=None, file=None, slicejob=None, dependency=None):
         return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=dependency)
 
-    def cancel_active_task(self):
+    def cancel_active_task(self, notify_octoprint=True):
          # Disable the printer
          self.status.printCancelled = True
          self.status.save()
@@ -431,10 +437,9 @@ class OctoprintConnection(models.Model):
                  self.active_task.print_job.success = False
                  self.active_task.print_job.save()
          # We cancel the job on octoprint
-         fields = {'command': 'cancel'}
-         r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/job'),
-                                                headers=self._get_connection_headers(),
-                                                body=json.dumps(fields).encode('utf-8'))
+         if notify_octoprint:
+            self._cancel_octoprint_task()
+
          return True
 
     def reset_connection(self):

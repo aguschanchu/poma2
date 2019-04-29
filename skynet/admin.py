@@ -4,19 +4,20 @@ from django.utils.html import format_html_join, format_html
 
 # Register your models here.
 
+@admin.register(Color)
 class ColorAdmin(admin.ModelAdmin):
     list_display = ('name',)
 
-
+@admin.register(Material)
 class MaterialAdmin(admin.ModelAdmin):
     list_display = ('name', )
 
-
+@admin.register(FilamentProvider)
 class FilamentProviderAdmin(admin.ModelAdmin):
     list_display = ('name', 'telephone')
     fields = ('name', 'telephone')
 
-
+@admin.register(MaterialBrand)
 class MaterialBrandAdmin(admin.ModelAdmin):
     list_display = ('name', 'filament_providers')
     fieldsets = (
@@ -32,6 +33,7 @@ class MaterialBrandAdmin(admin.ModelAdmin):
     def filament_providers(self, obj):
         return "\n".join([p.name for p in obj.providers.all()])
 
+@admin.register(Filament)
 class FilamentAdmin(admin.ModelAdmin):
     list_display = ('name', 'brand', 'color', 'material', 'bed_temperature', 'nozzle_temperature', 'price_per_kg', 'stock')
     fieldsets = (
@@ -54,7 +56,7 @@ class FilamentAdmin(admin.ModelAdmin):
         return obj.name
 
 
-
+@admin.register(Piece)
 class PieceAdmin(admin.ModelAdmin):
     list_display = ('order', 'scale', 'copies',  'stl', 'build_time', 'weight')
 
@@ -64,21 +66,28 @@ class PieceAdmin(admin.ModelAdmin):
     def weight(self, obj):
         return obj.get_weight()
 
+class PieceInline(admin.TabularInline):
+    model = Piece
+    extra = 0
+    readonly_fields = ('completed_pieces', 'ready')
 
+    def completed_pieces(self, obj):
+        return obj.completed_pieces
+
+    def ready(self, obj):
+        return True if obj.completed_pieces == obj.copies else False
+
+    ready.boolean = True
+
+@admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('client', 'due_date', 'priority')
+    list_display = ('client', 'due_date', 'priority', 'ready')
+    inlines = (PieceInline,)
 
-class PrinterAdmin(admin.ModelAdmin):
-    list_display = ()
+    def ready(self, obj):
+        return True if all([x.completed_pieces == x.copies for x in obj.pieces.all()]) else False
 
-admin.site.register(Color, ColorAdmin)
-admin.site.register(Material, MaterialAdmin)
-admin.site.register(FilamentProvider, FilamentProviderAdmin)
-admin.site.register(MaterialBrand, MaterialBrandAdmin)
-admin.site.register(Filament, FilamentAdmin)
-admin.site.register(Order, OrderAdmin)
-admin.site.register(Piece, PieceAdmin)
-
+    ready.boolean = True
 
 class OctoprintStatusInline(admin.StackedInline):
     model = OctoprintStatus

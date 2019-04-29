@@ -187,6 +187,7 @@ def send_octoprint_task(task_id):
     if task.cancelled:
         return False
     if not task.job_filename.split('/')[-1] == task.connection.status.job.name:
+        task.connection.cancel_active_task(notify_octoprint=False)
         raise ValueError("Incorrect job name. Printer was manually controlled, so, we lost job tracking")
     if task.connection.status.printing or task.connection.status.paused:
         raise PrintNotFinished
