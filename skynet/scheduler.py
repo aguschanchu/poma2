@@ -103,8 +103,9 @@ def poma_scheduler(self):
                 for copy in range(0, p.queued_pieces):
                     tasks_data.append(task_data_type(p.id, int(p.get_build_time()), int(p.get_deadline_from_now()), copy, None))
 
+
         # Machines
-        available_machines = [p for p in skynet_models.Printer.objects.all() if p.printer_enabled]
+        available_machines = [p for p in skynet_models.Printer.objects.all() if p.printer_connection_enabled]
         machines_count = len(available_machines)
 
         # Create the model.

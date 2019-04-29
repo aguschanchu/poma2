@@ -125,8 +125,9 @@ class GcodeAdmin(admin.ModelAdmin):
 
 
 @admin.register(Printer)
-class GcodeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'printer_ready', 'printer_enabled')
+class PrinterAdmin(admin.ModelAdmin):
+    list_display = ('name', 'printer_ready')
+
 
 
 @admin.register(FilamentChange)

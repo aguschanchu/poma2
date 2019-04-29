@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.db import models
 from skynet.models import *
 from slaicer.models import PrintProfile
+import datetime
 
 class PrinterTypeSimplifiedSerializer(serializers.ModelSerializer):
     class Meta:
@@ -27,6 +28,19 @@ class PrinterSerializer(serializers.ModelSerializer):
     printer_type = PrinterTypeSimplifiedSerializer()
     filament = FilamentSimplifiedSerializer()
     connection = OctoprintConnectionSerializer()
+    printing = serializers.BooleanField()
+    human_int_req = serializers.BooleanField()
+    idle = serializers.BooleanField()
+    printer_connection_enabled = serializers.BooleanField()
+
+    def time_left_get(self, obj):
+        if obj.connection.active_task is None:
+            return ''
+        else:
+            return str(datetime.timedelta(seconds=round(obj.connection.active_task.time_left)))
+
+    time_left = serializers.SerializerMethodField('time_left_get')
+
 
     class Meta:
         model = Printer
@@ -53,4 +67,4 @@ class PrintJobSerializer(serializers.ModelSerializer):
         model = PrintJob
         fields = '__all__'
 
-    printer = PrinterSimplifiedSerializer(source='get_printer')
+    printer = PrinterSimplifiedSerializer(source='get_printer', required=False)

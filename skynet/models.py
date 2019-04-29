@@ -189,6 +189,7 @@ class OctoprintTask(models.Model):
     # Used to track task status
     job_sent = models.BooleanField(default=False)
     job_filename = models.CharField(max_length=300, null=True)
+    cancelled = models.BooleanField(default=False)
     objects = OctoprintTaskManager()
     # We support task dependency (something similar to celery chains)
     dependency = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='dependencies')
@@ -211,8 +212,9 @@ class OctoprintTask(models.Model):
         if self.celery_id is None:
             return False
         else:
-            return False if self.celery_id is None else TaskResult.objects.filter(
-                task_id=self.celery_id).last().status in states.READY_STATES
+            return False if not TaskResult.objects.filter(
+                task_id=self.celery_id).exists() else TaskResult.objects.filter(
+                task_id=self.celery_id).first().status in states.READY_STATES
 
     @property
     def awaiting_for_human_intervention(self):
@@ -279,18 +281,21 @@ class OctoprintStatus(models.Model):
     resuming = models.BooleanField(default=False)
     sdReady = models.BooleanField(default=False)
     connectionError = models.BooleanField(default=False)
+    printCancelled = models.BooleanField(default=False)
     last_update = models.DateTimeField(auto_now=True)
     temperature = models.OneToOneField(OctoprintTemperature, on_delete=models.CASCADE, null=True)
     job = models.OneToOneField(OctoprintJobStatus, on_delete=models.CASCADE, null=True)
     connection = models.OneToOneField('OctoprintConnection', null=True, on_delete=models.CASCADE, related_name='status')
 
     @property
-    def instance_ready(self):
-        return self.ready and not self.connectionError
+    def printer_disabled(self):
+        return self.closedOrError or self.connectionError or self.printCancelled
 
     @property
-    def printer_disabled(self):
-        return self.closedOrError or self.connectionError
+    def instance_ready(self):
+        return self.ready and not self.printer_disabled
+
+
 
 
 class OctoprintConnection(models.Model):
@@ -350,6 +355,10 @@ class OctoprintConnection(models.Model):
         return not self.locked and self.status.instance_ready
 
     @property
+    def connection_enabled(self):
+        return not (self.locked or self.status.printer_disabled)
+
+    @property
     def awaiting_for_human_intervention(self):
         return self.active_task.awaiting_for_human_intervention if self.active_task is not None else False
 
@@ -401,7 +410,6 @@ class OctoprintConnection(models.Model):
                 self.status.job.estimated_print_time_left = r['progress']['printTimeLeft']
             self.status.job.save()
         except:
-            traceback.print_exc()
             self.status.connectionError = True
             self.status.save()
 
@@ -410,6 +418,39 @@ class OctoprintConnection(models.Model):
 
     def create_task(self, commands=None, file=None, slicejob=None, dependency=None):
         return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=dependency)
+
+    def cancel_active_task(self):
+         # Disable the printer
+         self.status.printCancelled = True
+         self.status.save()
+         if self.active_task is not None:
+             self.active_task.cancelled = True
+             self.active_task.save()
+             # If we have an active print job, we set the result
+             if hasattr(self.active_task, 'print_job'):
+                 self.active_task.print_job.success = False
+                 self.active_task.print_job.save()
+         # We cancel the job on octoprint
+         fields = {'command': 'cancel'}
+         r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/job'),
+                                                headers=self._get_connection_headers(),
+                                                body=json.dumps(fields).encode('utf-8'))
+         return True
+
+    def reset_connection(self):
+        fields = {'command': 'disconnect'}
+        r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/connection'),
+                                                headers=self._get_connection_headers(),
+                                                body=json.dumps(fields).encode('utf-8'))
+        fields = {'command': 'connect'}
+        r = self._get_connection_pool().request('POST', urljoin(self.url, 'api/connection'),
+                                                headers=self._get_connection_headers(),
+                                                body=json.dumps(fields).encode('utf-8'))
+        # We reset the status for the printer
+        self.status.printCancelled = False
+        self.status.connectionError = False
+        self.status.save()
+
 
 
 @receiver(pre_save, sender=OctoprintConnection)
@@ -454,11 +495,30 @@ class Printer(models.Model):
 
     @property
     def printer_ready(self):
-        return self.connection.printer_ready
+        return self.connection.printer_ready and not self.disabled
 
     @property
-    def printer_enabled(self):
-        return not (self.disabled or self.connection.status.printer_disabled)
+    def printer_connection_enabled(self):
+        return self.connection.connection_enabled and not self.disabled
+
+    @property
+    def printer_with_errors(self):
+        return self.connection.status.printer_disabled
+
+    @property
+    def printing(self):
+        return not self.connection.active_task.ready if self.connection.active_task is not None else False
+
+    @property
+    def human_int_req(self):
+        return self.connection.active_task.awaiting_for_human_intervention if self.connection.active_task is not None else False
+
+    @property
+    def idle(self):
+        if self.connection.active_task is None:
+            return True
+        else:
+            return not self.connection.active_task.finished
 
 
 '''
@@ -477,7 +537,8 @@ class Gcode(models.Model):
     celery_id = models.CharField(max_length=200, null=True, blank=True)
 
     def ready(self):
-        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
+        return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(
+            task_id=self.celery_id).first().status in states.READY_STATES
 
 
 # Order Models
@@ -601,12 +662,12 @@ class UnitPiece(models.Model):
 # PrintJob Model
 
 class PrintJob(models.Model):
-    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='print_job')
+    task = models.OneToOneField(OctoprintTask, on_delete=models.CASCADE, related_name='print_job', blank=True)
     success = models.NullBooleanField()
     created = models.DateTimeField(default=timezone.now)
     end_time = models.DateTimeField(null=True, blank=True)
-    estimated_end_time = models.DateTimeField()
-    filament = models.ForeignKey(Filament, on_delete=models.CASCADE)
+    estimated_end_time = models.DateTimeField(blank=True)
+    filament = models.ForeignKey(Filament, on_delete=models.CASCADE, blank=True)
 
     @property
     def printing(self):
@@ -644,12 +705,13 @@ class Schedule(models.Model):
 
     @property
     def schedule_ready(self):
-        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
+        return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(
+            task_id=self.celery_id).first().status in states.READY_STATES
 
     @property
     def dispatcher_ready(self):
-        return False if self.dispatcher_celery_id is None else TaskResult.objects.filter(task_id=self.dispater_celery_id).last().status in states.READY_STATES
-
+        return False if not TaskResult.objects.filter(task_id=self.dispatcher_celery_id).exists() else TaskResult.objects.filter(
+            task_id=self.dispatcher_celery_id).first().status in states.READY_STATES
 
     def ready(self):
         return self.dispatcher_ready and self.schedule_ready

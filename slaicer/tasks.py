@@ -17,9 +17,16 @@ import subprocess
 import re
 from django.core.files.base import ContentFile
 
-@shared_task()
+class ModelNotReady(Exception):
+    """Model not ready exception, used for celery autoretry"""
+    pass
+
+@shared_task(queue='celery', autoretry_for=(ModelNotReady,), max_retries=5, default_retry_delay=2)
 def fill_tweaker_result(geometrymodel_id):
-    geometrymodel = modelos.GeometryModel.objects.get(id=geometrymodel_id)
+    try:
+        geometrymodel = modelos.GeometryModel.objects.get(id=geometrymodel_id)
+    except modelos.GeometryModel.DoesNotExist:
+        raise ModelNotReady
     # Returns a Tweak instance
     tweaker_result = generate_tweaker_result(geometrymodel)
     mesh = trimesh.load_mesh(geometrymodel.get_model_path())
@@ -34,9 +41,12 @@ def fill_tweaker_result(geometrymodel_id):
     tr.save()
 
 
-@shared_task()
+@shared_task(queue='celery', autoretry_for=(ModelNotReady,), max_retries=5, default_retry_delay=2)
 def fill_geometry_result(geometrymodel_id):
-    geometrymodel = modelos.GeometryModel.objects.get(id=geometrymodel_id)
+    try:
+        geometrymodel = modelos.GeometryModel.objects.get(id=geometrymodel_id)
+    except modelos.GeometryModel.DoesNotExist:
+        raise ModelNotReady
 
     # Returns a LayerHeightOptimizer instance
     lho = LayerHeightOptimizer.import_from_geometrymodel(geometrymodel)
@@ -80,9 +90,6 @@ def parse_build_time(line):
     return printing_time_s
 
 
-class ModelNotReady(Exception):
-    """Model not ready exception, used for celery autoretry"""
-    pass
 
 
 @shared_task(queue='celery', autoretry_for=(ModelNotReady,), max_retries=60, default_retry_delay=2)

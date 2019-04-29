@@ -143,7 +143,7 @@ class TweakerResult(models.Model):
                                           on_delete=models.CASCADE)
 
     def ready(self):
-        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
+        return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
     @property
     def support_needed(self):
@@ -160,7 +160,7 @@ class GeometryResult(models.Model):
                                           on_delete=models.CASCADE)
 
     def ready(self):
-        return False if self.celery_id is None else TaskResult.objects.filter(task_id=self.celery_id).last().status in states.READY_STATES
+        return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
 
 class GeometryModelManager(models.Manager):

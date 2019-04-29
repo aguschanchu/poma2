@@ -10,6 +10,7 @@ from slaicer.tasks import parse_build_time
 from django.conf import settings
 import traceback
 from .scheduler import *
+from urllib3.exceptions import MaxRetryError, TimeoutError
 
 
 @shared_task(queue='celery')
@@ -183,6 +184,8 @@ def send_octoprint_task(task_id):
             task.save()
             task.connection.update_status()
     ## The printer should be working by now. Let's check for job completion
+    if task.cancelled:
+        return False
     if not task.job_filename.split('/')[-1] == task.connection.status.job.name:
         raise ValueError("Incorrect job name. Printer was manually controlled, so, we lost job tracking")
     if task.connection.status.printing or task.connection.status.paused:
