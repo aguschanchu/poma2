@@ -1,0 +1,150 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" ng-app="myApp" xmlns="http://www.w3.org/1999/html">
+<head>
+  <meta charset="utf-8">
+  <title>PoMa Overseer</title>
+  <meta name="description" content="">
+  <!-- Bootstrap -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.5.0/css/fontawesome.css" integrity="sha384-u5J7JghGz0qUrmEsWzBQkfvc8nK3fUT7DCaQzNQ+q4oEXhGSx+P2OqjWsfIRB8QT" crossorigin="anonymous">
+  <link rel="stylesheet" href="{% static 'overseer/app.css' %}">
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.7.5/angular.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.7.5/angular-animate.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.7.5/angular-sanitize.js"></script>
+  <link rel="stylesheet" href="{% static 'overseer/angular-ui-notification.min.css' %}">
+  <script src="{% static 'overseer/angular-ui-notification.min.js' %}"></script>
+  <script src="{% static 'overseer/ui-bootstrap-tpls-3.0.5.js' %}"></script>
+
+  <script src="{% static 'overseer/app.js' %}"></script>
+</head>
+{% verbatim %}
+<body>
+<header>
+  <nav class="navbar navbar-expand-md navbar-dark static-top bg-dark">
+    <a class="navbar-brand" href="#">PoMa</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarCollapse">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item active">
+          <a class="nav-link" href="#">Overseer<span class="sr-only">(current)</span></a>
+        </li>
+        <li class="nav-item active">
+          <a class="nav-link" href="#">Orders<span class="sr-only">(current)</span></a>
+        </li>
+        <li class="nav-item active">
+          <a class="nav-link" href="#">Schedule<span class="sr-only">(current)</span></a>
+        </li>
+        <li class="nav-item active">
+          <a class="nav-link" href="/admin">Admin<span class="sr-only">(current)</span></a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+</header>
+<main role="main">
+<div class="container-fluid">
+<div class="row">
+   <!-- Filament change -->
+  <div class="col-lg-5 tabla-impresoras fc-table">
+    <h3>Filament changes</h3>
+    <table class="table container-fluid" ng-controller="PollingFilamentChangeController">
+      <thead>
+      <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Id</th>
+          <th scope="col">Color</th>
+          <th scope="col">Material</th>
+          <th scope="col">Brand</th>
+          <th></th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr ng-repeat="x in filament_changes" class="table-warning">
+          <td ><b>{{ x.printer.name }}</b></td>
+          <td>{{ x.printer.id }}</td>
+          <td> {{ x.new_filament.color.name | capitalize }}</td>
+          <td> {{ x.new_filament.material.name }}</td>
+          <td> {{ x.new_filament.brand.name}}</td>
+        <!--- Cambio de color --->
+          <td><i class="fas fa-check-circle" ng-click="getConfirmChange(x.id)" title="Confirm filament change"></i></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Printers -->
+    <div class="col-lg-5 tabla-impresoras fc-table">
+    <h3>Printers</h3>
+    <table class="container-fluid table" ng-controller="PollingPrintersController">
+      <thead>
+      <tr>
+          <th scope="col">Name</th>
+          <th scope="col">ID</th>
+          <th scope="col">Color</th>
+          <th scope="col">Material</th>
+          <th scope="col">Time left</th>
+          <th></th>
+          <th></th>
+          <th></th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr ng-repeat="x in printers" class="{{ x.statusclass }}">
+          <td>{{ x.name }}</td>
+          <td>{{ x.id }}</td>
+          <td>{{ x.filament.color.name }}</td>
+          <td>{{ x.filament.material.name }}</td>
+          <td>{{ x.time_left }}</td>
+          <td></td>
+           <td>
+            <!--- Ver octoprint --->
+            <a href="{{ x.connection.url }}"><i class="fas fa-cogs" title="Open Octoprint"></i></a>
+           </td>
+          <td><i class="fas fa-times-circle" ng-click="CancelPrint(x.id)" title="Cancel active print job"></i></td>
+          <td ng-if="x.statusclass == 'table-danger'"><i class="fas fa-undo" ng-click="ResetPrinter(x.id)" title="Reset printer"></i></td>
+          <td ng-if="x.statusclass != 'table-danger'"></td>
+
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="row">
+    <!-- Print jobs -->
+   <div class="col-lg-5 tabla-impresoras fc-table">
+    <h3>Print jobs finished</h3>
+    <table class="container-fluid table" ng-controller="PollingPrintJobController">
+      <thead>
+      <tr>
+          <th scope="col">Printer name</th>
+          <th scope="col">Printer id</th>
+          <th></th>
+          <th></th>
+          <th></th>
+          <th></th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr ng-repeat="x in print_jobs" class="table-warning">
+          <td ><b>{{ x.printer.name }}</b></td>
+          <td>{{ x.printer.id }}</td>
+          <td></td>
+          <td></td>
+          <td><i class="fas fa-check-circle" ng-click="PutConfirmChange(x.id, 'True')" title="Finished successfully"></i></td>
+          <td><i class="fas fa-exclamation-triangle" ng-click="PutConfirmChange(x.id, 'False')" title="Print job again"></i></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+    <div class="col-lg-5 tabla-impresoras fc-table"></div>
+</div>
+</div>
+
+</main>
+</body>
+{% endverbatim %}
+</html>
