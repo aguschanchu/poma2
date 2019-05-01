@@ -13,12 +13,27 @@ from .scheduler import *
 from urllib3.exceptions import MaxRetryError, TimeoutError
 
 
-@shared_task(queue='celery')
+class PrintNotFinished(Exception):
+   """Print not finished exception, used for celery autoretry"""
+   pass
+
+
+class SlicingNotFinished(Exception):
+   """Slicejob not finished exception, used for celery autoretry"""
+   pass
+
+
+
+@shared_task(queue='celery', autoretry_for=(ValueError,), max_retries=5, default_retry_delay=2)
 def quote_gcode(piece_id):
     """
     Quotes a single gcode to obtain the estimated printing time and weight.
     """
-    piece = skynet_models.Piece.objects.get(id=piece_id)
+    try:
+        piece = skynet_models.Piece.objects.get(id=piece_id)
+    except piece.DoesNotExist:
+        raise ValueError
+
     # Reads printing time from gcode file.
     filename = os.path.join(settings.BASE_DIR, piece.gcode.print_file.path)
 
@@ -37,7 +52,7 @@ def quote_gcode(piece_id):
                 traceback.print_exc()
                 time, length = timedelta(hours=20), 0
             radius = (1.75 / 2) / 10  # in cm
-            density = piece.material.density
+            density = piece.gcode.material.density
             weight_g = radius ** 2 * pi * length * density  # in g
             weight_kg = weight_g / 1000  # in kg
 
@@ -149,17 +164,8 @@ OctoprintConnection Celery tasks
 '''
 
 
-class PrintNotFinished(Exception):
-   """Print not finished exception, used for celery autoretry"""
-   pass
 
-
-class SlicingNotFinished(Exception):
-   """Slicejob not finished exception, used for celery autoretry"""
-   pass
-
-
-@shared_task(queue='celery', autoretry_for=(PrintNotFinished,), max_retries=None, default_retry_delay=2)
+@shared_task(queue='celery', autoretry_for=(PrintNotFinished, SlicingNotFinished), max_retries=None, default_retry_delay=2)
 def send_octoprint_task(task_id):
     """ 
     Sends OctoprintTask to printer. In case we need to wait for completion, the task will keep raising PrintNotFinished

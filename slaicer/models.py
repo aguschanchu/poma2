@@ -143,6 +143,8 @@ class TweakerResult(models.Model):
                                           on_delete=models.CASCADE)
 
     def ready(self):
+        if self.rotation_matrix is not None:
+            return True
         return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
     @property
@@ -160,6 +162,8 @@ class GeometryResult(models.Model):
                                           on_delete=models.CASCADE)
 
     def ready(self):
+        if self.mean_layer_height is not None:
+            return True
         return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
 
@@ -313,12 +317,14 @@ class SliceJob(models.Model):
         return True if self.profile.print is None else False
 
     def ready(self):
+        if self.build_time is not None:
+            return True
         return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(task_id=self.celery_id).first().status in states.READY_STATES
 
     def launch_task(self):
         if not hasattr(self, 'profile'):
             raise ValidationError("Profile not specified")
-        self.celery_id = tasks.slice_model.s(self.id).apply_async()
+        self.celery_id = tasks.slice_model.s(self.id).apply_async(countdown=1)
         self.save(update_fields=['celery_id'])
 
     # Sometimes we need the build_time, while we are slicing the model

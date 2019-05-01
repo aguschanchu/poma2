@@ -312,8 +312,8 @@ class OctoprintConnection(models.Model):
 
     @staticmethod
     def _get_connection_pool():
-        retry_policy = Retry(total=3, status_forcelist=list(range(405, 501)))
-        timeout_policy = Timeout(read=10, connect=5)
+        retry_policy = Retry(total=20, status_forcelist=list(range(405, 501)), connect=10, read=10, backoff_factor=0.2)
+        timeout_policy = Timeout(read=50, connect=20)
         return PoolManager(retries=retry_policy, timeout=timeout_policy)
 
     def _get_connection_headers(self, json_content: bool = True):
@@ -423,6 +423,7 @@ class OctoprintConnection(models.Model):
         return self.status
 
     def create_task(self, commands=None, file=None, slicejob=None, dependency=None):
+        # Accepts a string, ContentFile, or slicejob instance
         return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=dependency)
 
     def cancel_active_task(self, notify_octoprint=True):
@@ -544,6 +545,8 @@ class Gcode(models.Model):
     celery_id = models.CharField(max_length=200, null=True, blank=True)
 
     def ready(self):
+        if self.build_time is not None:
+            return True
         return False if not TaskResult.objects.filter(task_id=self.celery_id).exists() else TaskResult.objects.filter(
             task_id=self.celery_id).first().status in states.READY_STATES
 

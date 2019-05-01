@@ -162,6 +162,8 @@ MEDIA_ROOT = 'media/'
 MEDIA_URL = '/media/'
 
 SITE_ID = 1
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 * 100
+
 
 #Celery config
 CELERY_RESULT_BACKEND = 'django-db'

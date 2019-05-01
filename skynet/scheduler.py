@@ -2,6 +2,7 @@ from __future__ import absolute_import, unicode_literals
 from celery import shared_task, group
 from ortools.sat.python import cp_model
 import collections
+from django.core.files.base import ContentFile
 import skynet.models as skynet_models
 from django.conf import settings
 import datetime
@@ -305,6 +306,8 @@ def poma_dispatcher(self, sid):
                 break
     # Ready to go!
     for entry in pending_tasks:
+        gcode = None
+        slicejob = None
         printer = entry.printer
         piece = entry.piece
         filament = printer.filament if piece.check_for_filament_compatibility(printer.filament) else piece.select_filament()
@@ -331,17 +334,13 @@ def poma_dispatcher(self, sid):
             raise ValueError('Invalid piece, this should be prevented by model validation')
 
         # Prepare filament and send task
-        ## DRY ;)
-        gcode = gcode if 'gcode' in locals() else None
-        slicejob = slicejob if 'slicejob' in locals() else None
-
         if filament == printer.filament:
-            task = printer.connection.create_task(slicejob=slicejob, file=gcode)
+            task = printer.connection.create_task(slicejob=slicejob, file=ContentFile(gcode.print_file.read()) if gcode is not None else None)
         else:
             fc = skynet_models.FilamentChange.objects.issue_change_and_start_task(new_filament=filament,
                                                                              connection=printer.connection,
                                                                              slicejob=slicejob,
-                                                                             file=gcode)
+                                                                             file=ContentFile(gcode.print_file.read()) if gcode is not None else None)
             task = fc.task.dependencies.first()
         # All set, we save the launched task in the schedule
         schedule.launched_tasks.add(task)
