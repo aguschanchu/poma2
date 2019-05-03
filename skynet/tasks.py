@@ -31,7 +31,7 @@ def quote_gcode(piece_id):
     """
     try:
         piece = skynet_models.Piece.objects.get(id=piece_id)
-    except piece.DoesNotExist:
+    except skynet_models.Piece.DoesNotExist:
         raise ValueError
 
     # Reads printing time from gcode file.
@@ -52,7 +52,7 @@ def quote_gcode(piece_id):
                 traceback.print_exc()
                 time, length = timedelta(hours=20), 0
             radius = (1.75 / 2) / 10  # in cm
-            density = piece.gcode.material.density
+            density = piece.gcode.material.density if piece.gcode.material.density is not None else 0
             weight_g = radius ** 2 * pi * length * density  # in g
             weight_kg = weight_g / 1000  # in kg
 
