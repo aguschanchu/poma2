@@ -207,6 +207,8 @@ class OctoprintTask(models.Model):
 
     @property
     def ready(self):
+        if self.cancelled:
+            return True
         if not self.slice_job_ready:
             return False
         if self.celery_id is None:

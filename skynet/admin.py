@@ -118,6 +118,17 @@ class OctoprintConnectionAdmin(admin.ModelAdmin):
 @admin.register(OctoprintTask)
 class OctoprintTaskAdmin(admin.ModelAdmin):
     list_display = ('connection', 'type', 'file', 'job_sent', 'ready', 'awaiting_for_human_intervention')
+    actions = ['cancel_tasks']
+
+    def cancel_tasks(self, request, queryset):
+        queryset.update(cancelled=True)
+        for o in queryset:
+            if hasattr(o, 'print_job'):
+                self.active_task.print_job.success = False
+                self.active_task.print_job.save()
+        self.message_user(request, "{} successfully cancelled".format(queryset.count()))
+
+    cancel_tasks.short_description = "Cancel tasks"
 
     def ready(self, obj):
         return obj.ready

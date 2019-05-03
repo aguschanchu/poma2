@@ -216,11 +216,12 @@ def octoprint_task_dispatcher():
         # Update current task
         dep = None
         if conn.active_task is not None:
-            if conn.active_task.finished:
+            if conn.active_task.finished or conn.active_task.cancelled:
                 # Does another task depends on this task? In that case, we should launch that one
                 dep = conn.active_task.dependencies.first() if conn.active_task.dependencies.count() > 0 else None
                 # We clear the current task
                 conn.active_task = None
+                conn.save()
         # Send new task
         if conn.active_task is None and conn.connection_ready:
             # Do we have pending tasks?

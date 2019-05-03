@@ -96,12 +96,12 @@ class Component(models.Model):
     Model for a component of a variation or a simple product in the clients' WooCommerce. Components hold the information
     for a specific file to print, such as the STL/OBJ file itself, its scale and the amount needed.
     """
-    print_settings = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True)
+    print_settings = models.ForeignKey(PrintProfile, on_delete=models.SET_NULL, null=True, blank=True)
     quantity = models.IntegerField(default=1)
     stl = models.ForeignKey(GeometryModel, on_delete=models.SET_NULL, null=True, blank=True)
     gcode = models.ForeignKey(Gcode, on_delete=models.SET_NULL, blank=True, null=True)
-    variation = models.ForeignKey(Variation, on_delete=models.SET_NULL, related_name='variation_components', null=True)
-    product = models.ForeignKey(Variation, on_delete=models.SET_NULL, related_name='product_components', null=True)
+    variation = models.ForeignKey(Variation, on_delete=models.SET_NULL, related_name='variation_components', null=True, blank=True)
+    product = models.ForeignKey(Variation, on_delete=models.SET_NULL, related_name='product_components', null=True, blank=True)
 
 # WooCommerce Client Model
 
