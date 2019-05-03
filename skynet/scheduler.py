@@ -32,9 +32,13 @@ def print_piece_on_printer_check(piece, printer):
         printer_size = sorted(printer.printer_type.bed_shape)
         if not all([piece_size[i] < printer_size[i] for i in range(0, 3)]):
             return False
+    # Gcode check
+    if piece.gcode is not None:
+        if piece.gcode.printer_type != printer.printer_type:
+            return False
     # Print settings check
     if piece.print_settings is not None:
-        if piece.print_settings != printer.printer_type:
+        if piece.print_settings not in printer.printer_type.available_print_profiles.all():
             return False
     else:
         pass

@@ -35,14 +35,14 @@ class MaterialBrandAdmin(admin.ModelAdmin):
 
 @admin.register(Filament)
 class FilamentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'brand', 'color', 'material', 'bed_temperature', 'nozzle_temperature', 'price_per_kg', 'stock')
+    list_display = ('brand', 'color', 'material', 'bed_temperature', 'nozzle_temperature', 'price_per_kg', 'stock')
     fieldsets = (
         (None, {
             'fields': ('brand', 'color', 'material')
         }),
         ('Advanced options', {
             'classes': ('collapse',),
-            'fields': ('name', 'bed_temperature', 'nozzle_temperature'),
+            'fields': ('bed_temperature', 'nozzle_temperature'),
         }),
     )
 
