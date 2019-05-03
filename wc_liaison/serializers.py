@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from wc_liaison.models import Product, Attribute, Variation, Component, AttributeTerm, Order, OrderItem, Client
+from wc_liaison.models import Product, Attribute, Variation, Component, AttributeTerm, Order, OrderItem, Customer
 from skynet.models import Order as PoMaOrder, Piece, Material, Color, Filament
 from datetime import datetime, timedelta
 
@@ -10,20 +10,53 @@ class AttributeSerializer(serializers.ModelSerializer):
     Serializer for the Attribute class. Property 'uuid' is encoded as 'id'
     """
     id = serializers.IntegerField(source='uuid')
+
     class Meta:
         model = Attribute
         fields = ('name', 'id')
 
+    def create(self, validated_data):
+        attribute = Attribute.objects.update_or_create(uuid=validated_data['uuid'], defaults={'name': validated_data['name']})
+        return attribute
+
 class AttributeTermSerializer(serializers.ModelSerializer):
     """
-    Serializer for the AttributeTerm class. Parent attribute is encoded through its 'name' and 'uuid'
+    Serializer for the AttributeTerm class.
     """
-    name = serializers.CharField(source='attribute.name')
+
+    id = serializers.IntegerField(source='uuid')
+    name = serializers.CharField(source='option')
+
+    class Meta:
+        model = AttributeTerm
+        fields = ('id', 'name')
+
+    def to_internal_value(self, data):
+        if 'name' not in data:
+            try:
+                attribute_term=AttributeTerm.objects.get(uuid=data['id'])
+                data['name']=attribute_term.name
+            except:
+                data['name'] = f'Attribute term #{data["id"]}'
+        return super(AttributeTermSerializer, self).to_internal_value(data)
+
+    def create(self, validated_data):
+        associated_attribute = Attribute.objects.get(uuid=self.context['attribute_id'])
+        attribute_term = AttributeTerm.objects.update_or_create(uuid=validated_data['uuid'], defaults={'option': validated_data['option'], 'attribute':associated_attribute})
+        return attribute_term
+
+
+
+class VariationAttributeTermSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the AttributeTerm class to be used to deserialize attribute terms from a variation. Parent attribute is encoded through its 'uuid'
+    """
     id = serializers.IntegerField(source='attribute.uuid')
 
     class Meta:
         model = AttributeTerm
-        fields = ('id', 'name', 'option')
+        fields = ('id', 'option')
+
 
 class ProductSerializer(serializers.ModelSerializer):
     """
@@ -33,17 +66,18 @@ class ProductSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source='product_id')
     class Meta:
         model = Product
-        fields = ('name', 'id', 'sku', 'attributes')
+        fields = ('name', 'id', 'sku', 'type', 'attributes')
 
     def create(self, validated_data):
+        product, created = Product.objects.update_or_create(product_id=validated_data['product_id'], defaults={'name': validated_data['name'], 'sku': validated_data['sku'], 'type': validated_data['type']})
+        product.attributes.clear()
         product_attributes = validated_data.pop('attributes')
-        product = Product(name=validated_data['name'], product_id=validated_data['product_id'], sku=validated_data['sku'])
-        product.save()
         for product_attribute in product_attributes:
             try:
                 attribute = Attribute.objects.get(uuid=product_attribute['uuid'])
                 product.attributes.add(attribute)
-            except:
+            except Exception as e:
+                print(e)
                 print(f"Attribute {product_attribute['name']} not found")
         return product
 
@@ -54,7 +88,7 @@ class VariationSerializer(serializers.ModelSerializer):
     Parent product information is provided through context upon creating serializer instance.
     """
     id = serializers.IntegerField(source='variation_id')
-    attributes = AttributeTermSerializer(many=True, source='default_attributes')
+    attributes = VariationAttributeTermSerializer(many=True, source='default_attributes')
     class Meta:
         model = Variation
         fields = ('name', 'sku', 'id', 'attributes')
@@ -71,8 +105,8 @@ class VariationSerializer(serializers.ModelSerializer):
     # Overwritten method create() to assign default attributes
     def create(self, validated_data):
         associated_product = Product.objects.get(product_id=self.context['product_id'])
-        variation = Variation(sku=validated_data['sku'], variation_id=validated_data['variation_id'], name=validated_data['name'], product=associated_product)
-        variation.save()
+        variation, created = Variation.objects.update_or_create(variation_id=validated_data['variation_id'], defaults={'sku':validated_data['sku'], 'name': validated_data['name'], 'product':associated_product})
+        variation.default_attributes.clear()
         variation_attributes_options = validated_data.pop('default_attributes')
         for variation_option in variation_attributes_options:
             try:
@@ -91,7 +125,21 @@ class ComponentSerializer(serializers.ModelSerializer):
     variation_id = serializers.IntegerField(source='variation.variation_id')
     class Meta:
         object = Component
-        fields = ('scale', 'quantity', 'stl', 'variation_id')
+        fields = ('quantity', 'stl', 'gcode', 'variation_id')
+
+class CustomerSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Customer class.
+    """
+    id = serializers.IntegerField(source='uuid')
+
+    class Meta:
+        model = Customer
+        fields = ('id', 'first_name', 'last_name', 'email', 'username')
+
+    def create(self, validated_data):
+        customer = Customer.objects.update_or_create(uuid=validated_data['id'], defaults={'first_name':validated_data['first_name'], 'last_name':validated_data['last_name'], 'email':validated_data['email'], 'username':validated_data['username']})
+        return customer
 
 class OrderItemSerializer(serializers.ModelSerializer):
     """
@@ -101,7 +149,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     attributes = AttributeTermSerializer(many=True)
     class Meta:
         model = OrderItem
-        fields = ('variation_id', 'quantity', 'attributes')
+        fields = ('item_id', 'item_type', 'quantity', 'attributes')
 
 class OrderSerializer(serializers.ModelSerializer):
     """
@@ -110,25 +158,26 @@ class OrderSerializer(serializers.ModelSerializer):
     """
     order_number = serializers.IntegerField(source='uuid')
     items = OrderItemSerializer(many=True)
-    client = serializers.CharField(source='client.name')
+    customer = CustomerSerializer()
     class Meta:
         model = Order
-        fields = ('client', 'order_number', 'items')
+        fields = ('customer', 'order_number', 'items')
 
     def create(self, validated_data):
         # Get Client
-        client,created = Client.objects.get_or_create(name=validated_data['client']['name'])
+        customer, created = Customer.objects.update_or_create(uuid=validated_data['customer']['uuid'], defaults={'first_name':validated_data['customer']['first_name'], 'last_name':validated_data['customer']['last_name'], 'email':validated_data['customer']['email'], 'username':validated_data['customer']['username']})
+
 
         # Create WooCommerce Order and regular order
-        wc_order = Order(client=client, uuid=validated_data['uuid'])
+        wc_order = Order(customer=customer, uuid=validated_data['uuid'])
         wc_order.save()
 
-        order = PoMaOrder(client=client.name, order_number=validated_data['uuid'], priority=3, due_date=datetime.now()+timedelta(days=5))
+        order = PoMaOrder(client=f"{customer.first_name} {customer.last_name}", priority=3, due_date=datetime.now()+timedelta(days=5))
         order.save()
 
         # Create associated WooCommerce Order Items
         for item in validated_data['items']:
-            wc_order_item = OrderItem(order=wc_order, variation_id=item['variation_id'], quantity=item['quantity'])
+            wc_order_item = OrderItem(order=wc_order, item_id=item['item_id'], item_type=item['item_type'], quantity=item['quantity'])
             wc_order_item.save()
 
             compatible_colors = Color.objects.all()
@@ -136,25 +185,30 @@ class OrderSerializer(serializers.ModelSerializer):
 
             # Add attribute values to order items
             for item_attribute in item['attributes']:
-                attribute = Attribute.objects.get(uuid=item_attribute['attribute']['uuid'])
-                attribute_term = AttributeTerm.objects.get(attribute=attribute, option=item_attribute['option'])
+                # attribute = Attribute.objects.get(uuid=item_attribute['attribute']['uuid'])
+                attribute_term = AttributeTerm.objects.get(uuid=item_attribute['uuid'])
                 wc_order_item.attributes.add(attribute_term)
 
                 # Filter compatible colors and materials as allowed by each attribute term
                 compatible_colors = compatible_colors & attribute_term.color_implications.all()
                 compatible_materials = compatible_materials & attribute_term.material_implications.all()
 
-            # Get all filaments compatible with the appropiate color and material restrictions
-            compatible_filaments = Filament.objects.filter(color__in=compatible_colors, material__in=compatible_materials)
+            if item['item_type']=="variable":
+                components = Variation.objects.get(variation_id=item['item_id']).variation_components.all()
+            elif item['item_type']=="simple":
+                components = Product.objects.get(product_id=item['item_id']).product_components.all()
 
             # Create pieces from variation components
-            for component in Variation.objects.get(variation_id=item['variation_id']).components.all():
-                piece = Piece(order=order, scale=component.scale, copies=component.quantity*item['quantity'], stl=component.stl, status='Accepted')
+            for component in components:
+                piece = Piece(order=order, print_settings=component.print_settings, copies=component.quantity*item['quantity'], stl=component.stl, gcode=component.gcode)
                 piece.save()
 
-                # Add compatible filaments to piece
-                for compatible_filament in compatible_filaments:
-                    piece.filaments.add(compatible_filament)
+                # Add compatible colors and materials to piece
+                for color in compatible_colors:
+                    piece.colors.add(color)
+
+                for material in compatible_materials:
+                    piece.materials.add(material)
 
         return wc_order
 

@@ -569,7 +569,6 @@ class Piece(models.Model):
     # If it's none, they will be calculated automatically
     print_settings = models.ForeignKey('slaicer.PrintProfile', on_delete=models.SET_NULL, blank=True, null=True)
     copies = models.IntegerField(default=1)
-    scale = models.FloatField(default=1.0)
     materials = models.ManyToManyField(Material)
     colors = models.ManyToManyField(Color)
     # Used to mark the piece as canceled

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from wc_liaison.models import Attribute, AttributeTerm, Product, Variation, Component, WcApiKey, OrderItem, Order, Client
+from wc_liaison.models import Attribute, AttributeTerm, Product, Variation, Component, WcApiKey, OrderItem, Order, Customer
 
 # Register your models here.
 
@@ -7,20 +7,23 @@ class WC_APIKeyAdmin(admin.ModelAdmin):
     list_display = ('url', 'consumer_key', 'consumer_secret')
 
 class AttributeAdmin(admin.ModelAdmin):
-    list_display = ('uuid', 'name', 'slug','influences_color', 'influences_material')
-    fields = ('name', 'slug', 'uuid')
+    list_display = ('uuid', 'name', 'influences_color', 'influences_material')
+    fields = ('name', 'uuid')
 
     def influences_color(self, obj):
-        for term in obj.terms.all():
-            if term.color_implications.all():
-                return True
-        return False
+        # for term in obj.terms.all():
+        #     if term.color_implications.all():
+        #         return True
+        # return False
+        return obj.influences_color
+
 
     def influences_material(self, obj):
-        for term in obj.terms.all():
-            if term.material_implications.all():
-                return True
-        return False
+        # for term in obj.terms.all():
+        #     if term.material_implications.all():
+        #         return True
+        # return False
+        return obj.influences_material
 
 class AttributeTermAdmin(admin.ModelAdmin):
     list_display = ('option', 'parent_attribute', 'color_references', 'material_references')
@@ -35,7 +38,7 @@ class AttributeTermAdmin(admin.ModelAdmin):
         return " - ".join([material.name for material in obj.material_implications.all()])
 
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'product_id', 'product_attributes')
+    list_display = ('name', 'product_id', 'type', 'product_attributes')
 
     def product_attributes(self, obj):
         return " - ".join([p.name for p in obj.attributes.all()])
@@ -47,33 +50,33 @@ class VariationAdmin(admin.ModelAdmin):
         return obj.product.name
 
 class ComponentAdmin(admin.ModelAdmin):
-    list_display = ('stl', 'scale', 'quantity', 'parent_variation')
+    list_display = ('stl', 'gcode', 'quantity', 'parent_variation')
 
     def parent_variation(self, obj):
         return obj.variation.name
 
-class ClientAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ('uuid', 'first_name', 'last_name', 'email', 'username')
 
 class OrderAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'client_name', 'items')
 
     def client_name(self, obj):
-        return obj.client.name
+        return f"{obj.customer.first_name} {obj.customer.last_name}"
 
     def items(self, obj):
-        return " - ".join([f"{item.quantity}x {Variation.objects.get(variation_id=item.variation_id).name} " + ", ".join([attribute.option for attribute in item.attributes.all()]) for item in obj.items.all()])
+        return " - ".join([f"{item.quantity}x {Variation.objects.get(variation_id=item.item_id).name} " + ", ".join([attribute.option for attribute in item.attributes.all()]) for item in obj.items.all()])
 
 
 class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ('order_number', 'variation_id', 'variation_name', 'quantity', 'attribute_values')
+    list_display = ('order_number', 'item_id', 'variation_name', 'quantity', 'attribute_values')
 
     def order_number(self, obj):
         return obj.order.uuid
 
     def variation_name(self, obj):
         try:
-            variation = Variation.objects.get(variation_id=obj.variation_id)
+            variation = Variation.objects.get(variation_id=obj.item_id)
             return variation.name
         except Exception as e:
             print(e)
@@ -91,4 +94,4 @@ admin.site.register(Variation, VariationAdmin)
 admin.site.register(Component, ComponentAdmin)
 admin.site.register(Order, OrderAdmin)
 admin.site.register(OrderItem, OrderItemAdmin)
-admin.site.register(Client, ClientAdmin)
+admin.site.register(Customer, CustomerAdmin)
