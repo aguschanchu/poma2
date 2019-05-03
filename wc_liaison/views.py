@@ -60,7 +60,7 @@ class WooCommerceProduct(APIView):
             wcapi = API(url=settings.WOOCOMMERCE_URL, consumer_key=settings.CONSUMER_KEY, consumer_secret=settings.CONSUMER_SECRET,
                         wc_api=True, version="wc/v2")
 
-            products_in_store = wcapi.get("products?per_page=100&type=variable").json()
+            products_in_store = wcapi.get("products?per_page=100").json()
             products = ProductSerializer(data=products_in_store, many=True)
             if products.is_valid():
                 products.save()
