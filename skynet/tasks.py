@@ -213,6 +213,13 @@ def octoprint_task_dispatcher():
     Checks for pending OctoprintTasks on each connection, and starts the task
     """
     for conn in skynet_models.OctoprintConnection.objects.all():
+        # Do we need to send a beep to the printer?
+        if conn.awaiting_for_human_intervention:
+            conn.notification_count += 1
+            if conn.notification_count >= settings.BEEP_THRESHOLD_COUNT:
+                conn._issue_command("M300 S440 P400")
+                conn.notification_count = 0
+            conn.save()
         # Update current task
         dep = None
         if conn.active_task is not None:
@@ -239,5 +246,6 @@ def octoprint_task_dispatcher():
                 ct = send_octoprint_task.delay(t.id)
                 t.celery_id = ct.id
                 t.save()
+
 
 

@@ -190,7 +190,8 @@ TIME_ZONE = 'America/Argentina/Buenos_Aires'
 ## Forbidden zones configuration
 forbidden_zone = collections.namedtuple('zone', 'start duration')
 FORBIDDEN_ZONES = [forbidden_zone(start=21, duration=12)]
-
+## Send a beep to printers that are awaiting for human intervention (interval)
+BEEP_THRESHOLD_COUNT = 60000
 
 # Temp WooCommerce API Key
 

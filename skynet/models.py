@@ -113,9 +113,12 @@ class FilamentChangeManager(models.Manager):
     def issue_change(self, new_filament, connection):
         o = self.create(new_filament=new_filament)
         old_filament = connection.printer.filament
-        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n G28".format(
+        gcode = "M104 S{nozzle_temp} \nM140 S{bed_temp} \n M117 {color}-{material}-{brand}".format(
             bed_temp=max(new_filament.get_bed_temperature(), old_filament.get_bed_temperature()),
-            nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()))
+            nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()),
+            color=new_filament.color.name,
+            material=new_filament.material.name,
+            brand=new_filament.branl.name)
         o.task = connection.create_task(file=ContentFile(gcode))
         o.save()
         return o
@@ -190,7 +193,6 @@ class OctoprintTask(models.Model):
     job_sent = models.BooleanField(default=False)
     job_filename = models.CharField(max_length=300, null=True)
     cancelled = models.BooleanField(default=False)
-    objects = OctoprintTaskManager()
     # We support task dependency (something similar to celery chains)
     dependency = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='dependencies')
 
@@ -306,8 +308,10 @@ class OctoprintConnection(models.Model):
     active_task = models.ForeignKey(OctoprintTask, on_delete=models.SET_NULL, null=True, blank=True)
     # If the connection is locked, no new tasks will be executed from the queue.
     locked = models.BooleanField(default=False)
+    objects = OctoprintTaskManager()
+    # On each octoprint_dispatcher loop, notification_count will increase by one. When it reaches a certain number, we'll send a beep to the printer
+    notification_count = models.IntegerField(default=0)
 
-    # Octoprint flags
 
     def __str__(self):
         return self.url
