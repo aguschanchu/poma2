@@ -13,7 +13,7 @@ app.config(function(NotificationProvider) {
 });
 
 app.run(function($rootScope) {
-    $rootScope.endpoint = 'http://192.168.100.104:8000/skynet/';
+    $rootScope.endpoint = 'http://192.168.100.2:11000/skynet/';
 });
 
 app.controller('PollingFilamentChangeController', function($http, $scope, $interval, $rootScope, Notification) {
@@ -30,7 +30,7 @@ app.controller('PollingFilamentChangeController', function($http, $scope, $inter
     }, 5000);
 
     $scope.getConfirmChange = function (id) {
-        var url = $rootScope.endpoint + 'operations/confirm_filament_change/'+ id +'/?format=json';
+        var url = $rootScope.endpoint + 'operations/confirm_filament_change/'+ id +'/';
         $http({
             method: 'PUT',
             url: url,
@@ -58,7 +58,7 @@ app.controller('PollingPrintJobController', function($http, $scope, $interval, $
     }, 5000);
 
     $scope.PutConfirmChange = function (id, result) {
-        var url = $rootScope.endpoint + 'operations/confirm_job_result/'+ id +'/?format=json';
+        var url = $rootScope.endpoint + 'operations/confirm_job_result/'+ id +'/';
         $http({
             method: 'PUT',
             url: url,
@@ -108,7 +108,7 @@ app.controller('PollingPrintersController', function($http, $scope, $interval, $
     }, 5000);
 
     $scope.CancelPrint = function (id, result) {
-        var url = $rootScope.endpoint + 'operations/cancel_active_task/'+ id +'/?format=json';
+        var url = $rootScope.endpoint + 'operations/cancel_active_task/'+ id +'/';
         $http({
             method: 'GET',
             url: url
@@ -120,7 +120,7 @@ app.controller('PollingPrintersController', function($http, $scope, $interval, $
     };
 
     $scope.ResetPrinter = function (id, result) {
-        var url = $rootScope.endpoint + 'operations/reset_printer/'+ id +'/?format=json';
+        var url = $rootScope.endpoint + 'operations/reset_printer/'+ id +'/';
         $http({
             method: 'GET',
             url: url

@@ -29,7 +29,7 @@ SECRET_KEY = '&a@qm_fg$q&c3@983sh20ikf911_2dvhn5oq6s$m_t-^1)@g4x'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.100.104','localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['192.168.100.104', 'localhost', '127.0.0.1', 'poma', '192.168.100.2']
 
 
 # Application definition
@@ -53,11 +53,22 @@ INSTALLED_APPS = [
     'corsheaders',
 ]
 
+REST_FRAMEWORK = {
+'FORM_METHOD_OVERRIDE': None,
+'FORM_CONTENT_OVERRIDE': None,
+'FORM_CONTENTTYPE_OVERRIDE': None,
+'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny'
+    ],
+ 'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ]
+}
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -70,7 +81,7 @@ ROOT_URLCONF = 'poma2.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': ['poma2/templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
