@@ -29,7 +29,7 @@ SECRET_KEY = '&a@qm_fg$q&c3@983sh20ikf911_2dvhn5oq6s$m_t-^1)@g4x'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.100.104', 'localhost', '127.0.0.1', 'poma', '192.168.100.2']
+ALLOWED_HOSTS = ['192.168.100.104', 'localhost', '127.0.0.1', 'poma', '192.168.100.2', '186.137.9.13']
 
 
 # Application definition
@@ -73,7 +73,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    'request_logging.middleware.LoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'poma2.urls'

@@ -394,6 +394,14 @@ class OctoprintConnection(models.Model):
 
     def update_status(self):
         try:
+            # Connection status
+            r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/connection'),
+                                                    headers=self._get_connection_headers()).data.decode(
+                'utf-8'))
+            if r['current']['state'] in ["Closed"]:
+                self.status.connectionError = True
+                self.status.save()
+                return False
             # Instance status
             r = json.loads(self._get_connection_pool().request('GET', urljoin(self.url, 'api/printer'),
                                                                headers=self._get_connection_headers()).data.decode(
