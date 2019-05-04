@@ -490,6 +490,8 @@ class Piece(models.Model):
     # Used to track slaicer results, filled automatically
     auto_print_profile = models.BooleanField(default=True)
     auto_support = models.BooleanField(default=True)
+    # Used to indicate wether the piece was created by a woocommerce order o not
+    woocommerce_component = models.ForeignKey('wc_liaison.Component', on_delete=models.SET_NULL, null=True, blank=True)
 
     @property
     def completed_pieces(self):
