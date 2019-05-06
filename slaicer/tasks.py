@@ -127,11 +127,21 @@ def slice_model(slicejob_id):
     # Profile configuration
     if slicejob.profile.auto_print_profile:
         # We need to choose a profile based on GeometryResult, if it wasn't specified by user
-        min_layer_height = min([m.geometry.mean_layer_height for m in models]) / slicejob.profile.printer.base_quality
+        layer_heights = []
+        for m in models:
+            ly = m.geometry.mean_layer_height
+            # We restrict ly value based on quality selection
+            if m.quality is not None:
+                if not (float(m.quality.split(',')[0]) < ly < float(m.quality.split(',')[1])):
+                    ly = min([float(m.quality.split(',')[0]), float(m.quality.split(',')[1])],
+                             key=lambda x: abs(x-ly))
+            layer_heights.append(ly)
+        min_layer_height = min(layer_heights) / slicejob.profile.printer.base_quality
         print_profiles_available = slicejob.profile.printer.available_print_profiles.all()
         recommended_quality = min([p.layer_height for p in print_profiles_available],
                                   key=lambda x: abs(x - min_layer_height))
         slicejob.profile.print = print_profiles_available.filter(layer_height=recommended_quality)[0]
+
 
     if slicejob.profile.auto_support:
         support_needed = any([m.orientation.support_needed for m in models])

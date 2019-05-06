@@ -157,7 +157,7 @@ class GeometryResult(models.Model):
     plot = models.ImageField(upload_to='slaicer/plots/', null=True)
     celery_id = models.CharField(max_length=50, null=True)
     # TODO: Discretizar errores posibles (Geom)
-    error_log = models.CharField(max_length=300, null=True)
+    error_log = models.CharField(max_length=300, null=True, blank=True)
     geometry_model = models.OneToOneField('GeometryModel', related_name='geometry', blank=True,
                                           on_delete=models.CASCADE)
 
@@ -179,6 +179,16 @@ class GeometryModel(models.Model):
     file = models.FileField(upload_to='slaicer/geometry/')
     orientation_req = models.BooleanField(default=True)
     geometry_req = models.BooleanField(default=True)
+    # We use the quality field, to limit the range of values that mean_layer_height can take
+    quality_options = (
+        ('0,0.05', 'Maximum - <0.05mm'),
+        ('0.05,0.1', 'Very high - 0.05/0.1mm'),
+        ('0.1,0.15', 'High - 0.1/0.15mm'),
+        ('0.15,0.2', 'Normal - 0.15/0.2mm'),
+        ('0.2,0.25', 'Low - 0.2/0.25mm'),
+        ('0.25,100', 'Draft - >0.25mm')
+    )
+    quality = models.CharField(choices=quality_options, null=True, max_length=100)
     scale = models.FloatField(default=1)
     objects = GeometryModelManager()
 
