@@ -118,7 +118,7 @@ class FilamentChangeManager(models.Manager):
             nozzle_temp=max(new_filament.get_nozzle_temperature(), old_filament.get_nozzle_temperature()),
             color=new_filament.color.name,
             material=new_filament.material.name,
-            brand=new_filament.branl.name)
+            brand=new_filament.brand.name)
         o.task = connection.create_task(file=ContentFile(gcode))
         o.save()
         return o
@@ -442,21 +442,21 @@ class OctoprintConnection(models.Model):
         return OctoprintTask.objects.create_task(self, commands=commands, file=file, slicejob=slicejob, dependency=dependency)
 
     def cancel_active_task(self, notify_octoprint=True):
-         # Disable the printer
-         self.status.printCancelled = True
-         self.status.save()
-         if self.active_task is not None:
-             self.active_task.cancelled = True
-             self.active_task.save()
-             # If we have an active print job, we set the result
-             if hasattr(self.active_task, 'print_job'):
-                 self.active_task.print_job.success = False
-                 self.active_task.print_job.save()
-         # We cancel the job on octoprint
-         if notify_octoprint:
-            self._cancel_octoprint_task()
+        # Disable the printer
+        self.status.printCancelled = True
+        self.status.save()
+        if self.active_task is not None:
+            self.active_task.cancelled = True
+            self.active_task.save()
+            # If we have an active print job, we set the result
+            if hasattr(self.active_task, 'print_job'):
+                self.active_task.print_job.success = False
+                self.active_task.print_job.save()
+        # We cancel the job on octoprint
+        if notify_octoprint:
+           self._cancel_octoprint_task()
 
-         return True
+        return True
 
     def reset_connection(self):
         # If there is an ongoing task, we cancel it

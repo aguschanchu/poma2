@@ -132,9 +132,8 @@ def slice_model(slicejob_id):
             ly = m.geometry.mean_layer_height
             # We restrict ly value based on quality selection
             if m.quality is not None:
-                if not (float(m.quality.split(',')[0]) < ly < float(m.quality.split(',')[1])):
-                    ly = min([float(m.quality.split(',')[0]), float(m.quality.split(',')[1])],
-                             key=lambda x: abs(x-ly))
+                if not (m.min_quality < ly < m.max_quality):
+                    ly = min([m.min_quality, m.max_quality], key=lambda x: abs(x-ly))
             layer_heights.append(ly)
         min_layer_height = min(layer_heights) / slicejob.profile.printer.base_quality
         print_profiles_available = slicejob.profile.printer.available_print_profiles.all()

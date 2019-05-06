@@ -76,6 +76,12 @@ class PrinterProfile(models.Model):
                 'max_print_height': self.bed_shape[2],
                 'bed_shape': "0x0,{x}x0,{x}x{y},0x{y}".format(x=self.bed_shape[0], y=self.bed_shape[1])}
 
+    def min_quality(self):
+        return min([x.layer_height * self.base_quality for x in self.available_print_profiles.all()])
+
+    def max_quality(self):
+        return max([x.layer_height * self.base_quality for x in self.available_print_profiles.all()])
+
 
 class MaterialProfile(models.Model):
     bed_temperature = models.FloatField()
@@ -138,7 +144,7 @@ class TweakerResult(models.Model):
     size_z = models.FloatField(blank=True, default=0, null=True)
     celery_id = models.CharField(max_length=50)
     # TODO: Discretizar errores posibles (Tweak)
-    error_log = models.CharField(max_length=300, null=True)
+    error_log = models.CharField(max_length=300, null=True, blank=True)
     geometry_model = models.OneToOneField('GeometryModel', related_name='orientation', blank=True,
                                           on_delete=models.CASCADE)
 
@@ -188,7 +194,7 @@ class GeometryModel(models.Model):
         ('0.2,0.25', 'Low - 0.2/0.25mm'),
         ('0.25,100', 'Draft - >0.25mm')
     )
-    quality = models.CharField(choices=quality_options, null=True, max_length=100)
+    quality = models.CharField(choices=quality_options, null=True, max_length=100, blank=True)
     scale = models.FloatField(default=1)
     objects = GeometryModelManager()
 
@@ -239,7 +245,13 @@ class GeometryModel(models.Model):
     def geometry_result_ready(self):
         return False if not hasattr(self, 'geometry') else self.geometry.ready()
 
+    @property
+    def min_quality(self):
+        return float(self.quality.split(',')[0]) if self.quality is not None else None
 
+    @property
+    def max_quality(self):
+        return float(self.quality.split(',')[1]) if self.quality is not None else None
 
 
 '''
