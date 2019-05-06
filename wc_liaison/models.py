@@ -1,6 +1,7 @@
 from django.db import models
-from skynet.models import Gcode, Color, Material
+from skynet.models import Gcode, Color, Material, Order as SkynetOrder
 from slaicer.models import GeometryModel, PrintProfile
+from django.utils import timezone
 
 # WooCommerce API Key Model
 
@@ -101,7 +102,7 @@ class Component(models.Model):
     stl = models.ForeignKey(GeometryModel, on_delete=models.SET_NULL, null=True, blank=True)
     gcode = models.ForeignKey(Gcode, on_delete=models.SET_NULL, blank=True, null=True)
     variation = models.ForeignKey(Variation, on_delete=models.SET_NULL, related_name='variation_components', null=True, blank=True)
-    product = models.ForeignKey(Variation, on_delete=models.SET_NULL, related_name='product_components', null=True, blank=True)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, related_name='product_components', null=True, blank=True, limit_choices_to={'type': 'simple'})
 
 # WooCommerce Client Model
 
@@ -127,6 +128,8 @@ class Order(models.Model):
     Model for an order made through WooCommerce. Items in the order are accessible through self.items
     """
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='orders')
+    created = models.DateTimeField(default=timezone.now)
+    associated_order = models.ForeignKey(SkynetOrder, on_delete=models.CASCADE, related_name='woocommerce_order')
     uuid = models.IntegerField(primary_key=True)
 
 class OrderItem(models.Model):

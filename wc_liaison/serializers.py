@@ -2,7 +2,7 @@ from rest_framework import serializers
 from wc_liaison.models import Product, Attribute, Variation, Component, AttributeTerm, Order, OrderItem, Customer
 from skynet.models import Order as PoMaOrder, Piece, Material, Color, Filament
 from datetime import datetime, timedelta
-
+from django.utils import timezone
  # Serializers
 
 class AttributeSerializer(serializers.ModelSerializer):
@@ -169,11 +169,12 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
         # Create WooCommerce Order and regular order
-        wc_order = Order(customer=customer, uuid=validated_data['uuid'])
-        wc_order.save()
-
-        order = PoMaOrder(client=f"{customer.first_name} {customer.last_name}", priority=3, due_date=datetime.now()+timedelta(days=5))
+        order = PoMaOrder(client=f"{customer.first_name} {customer.last_name}", priority=3,
+                          due_date=datetime.now() + timedelta(days=5))
         order.save()
+
+        wc_order = Order(customer=customer, associated_order=order, created=timezone.now(), uuid=validated_data['uuid'])
+        wc_order.save()
 
         # Create associated WooCommerce Order Items
         for item in validated_data['items']:

@@ -59,7 +59,7 @@ class CustomerAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'first_name', 'last_name', 'email', 'username')
 
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('uuid', 'client_name', 'items')
+    list_display = ('uuid', 'created', 'associated_order', 'client_name', 'items')
 
     def client_name(self, obj):
         return f"{obj.customer.first_name} {obj.customer.last_name}"
