@@ -105,7 +105,8 @@ def poma_scheduler(self):
         for p in skynet_models.Piece.objects.all():
             if p.quote_ready() and not p.cancelled:
                 for copy in range(0, p.queued_pieces):
-                    tasks_data.append(task_data_type(p.id, int(p.get_build_time()), int(p.get_deadline_from_now()), copy, None))
+                    tasks_data.append(task_data_type(p.id, int(p.get_build_time()), max(int(p.get_deadline_from_now()), int(p.get_build_time())),
+                                                     copy, None))
 
 
         # Machines
