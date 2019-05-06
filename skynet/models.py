@@ -195,6 +195,8 @@ class OctoprintTask(models.Model):
     cancelled = models.BooleanField(default=False)
     # We support task dependency (something similar to celery chains)
     dependency = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='dependencies')
+    objects = OctoprintTaskManager()
+
 
     @property
     def status(self):
@@ -308,7 +310,6 @@ class OctoprintConnection(models.Model):
     active_task = models.ForeignKey(OctoprintTask, on_delete=models.SET_NULL, null=True, blank=True)
     # If the connection is locked, no new tasks will be executed from the queue.
     locked = models.BooleanField(default=False)
-    objects = OctoprintTaskManager()
     # On each octoprint_dispatcher loop, notification_count will increase by one. When it reaches a certain number, we'll send a beep to the printer
     notification_count = models.IntegerField(default=0)
 

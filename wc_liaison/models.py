@@ -129,7 +129,7 @@ class Order(models.Model):
     """
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='orders')
     created = models.DateTimeField(default=timezone.now)
-    associated_order = models.ForeignKey(SkynetOrder, on_delete=models.CASCADE, related_name='woocommerce_order')
+    associated_order = models.ForeignKey(SkynetOrder, on_delete=models.CASCADE, related_name='woocommerce_order', null=True)
     uuid = models.IntegerField(primary_key=True)
 
 class OrderItem(models.Model):
