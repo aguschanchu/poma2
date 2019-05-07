@@ -50,10 +50,15 @@ class VariationAdmin(admin.ModelAdmin):
         return obj.product.name
 
 class ComponentAdmin(admin.ModelAdmin):
-    list_display = ('stl', 'gcode', 'quantity', 'parent_variation')
+    list_display = ('stl', 'gcode', 'quantity', 'parent_item')
 
-    def parent_variation(self, obj):
-        return obj.variation.name
+    def parent_item(self, obj):
+        if obj.variation:
+            return obj.variation.name
+        elif obj.product:
+            return obj.product.name
+        else:
+            return "No parent item"
 
 class CustomerAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'first_name', 'last_name', 'email', 'username')

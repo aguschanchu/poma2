@@ -40,6 +40,7 @@ def set_scheduler_keepalive():
                                 task='skynet.scheduler.scheduler_service')
 
 
+
 if __name__ == '__main__':
     print('\n' + ('=' * 80) + '\n')
     import django
