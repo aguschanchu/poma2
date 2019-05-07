@@ -194,7 +194,12 @@ FORBIDDEN_ZONES = [forbidden_zone(start=21, duration=12)]
 BEEP_THRESHOLD_COUNT = 60000
 
 # Temp WooCommerce API Key
+# Test Site
+# WOOCOMMERCE_URL = "https://tercerojo.creame3d.com"
+# CONSUMER_KEY = "ck_b400211280df3fbb2fa7a37c1eec68b0de8f169a"
+# CONSUMER_SECRET = "cs_807f8bf3bd27bcd7c1c6c6d097504c7a924f520a"
 
-WOOCOMMERCE_URL = "https://tercerojo.creame3d.com"
-CONSUMER_KEY = "ck_b400211280df3fbb2fa7a37c1eec68b0de8f169a"
-CONSUMER_SECRET = "cs_807f8bf3bd27bcd7c1c6c6d097504c7a924f520a"
+# Production Site
+WOOCOMMERCE_URL = "https://creame3d.com"
+CONSUMER_KEY = "ck_790a1264634c53ff9a04c37bbbae67847f995bdc"
+CONSUMER_SECRET = "cs_d2942fef3c4373ba6b37e19d32bd70767edcfb4d"

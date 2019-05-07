@@ -11,7 +11,7 @@ from wc_liaison.models import Product, Variation
 with open('products_data.csv', 'w', newline='') as products_data:
     writer = csv.writer(products_data, delimiter=',', quoting=csv.QUOTE_MINIMAL)
     writer.writerow(['name', 'id', 'type', 'file_type', 'price', 'stl_name', 'stl_scale',
-                     'stl_layer_height', 'gcode_name', 'gcode_printer', 'gcode_material', 'quantity'])
+                     'stl_layer_height', 'gcode_name', 'gcode_printer', 'gcode_material', 'quantity', 'advertising_cost', 'input_cost'])
 
     for product in Product.objects.all():
         if product.type=='simple':
