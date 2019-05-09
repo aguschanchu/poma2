@@ -7,3 +7,7 @@ def index(request):
                                                          'domain': Site.objects.get_current().domain})}
     return render(request, 'overseer/index.html', context=context)
 
+def quote(request):
+    context = {'api_url': "{protocol}://{domain}/".format(**{'protocol': settings.CURRENT_PROTOCOL,
+                                                         'domain': Site.objects.get_current().domain})}
+    return render(request, 'overseer/quote.html', context=context)
