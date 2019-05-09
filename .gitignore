@@ -7,3 +7,5 @@ migrations
 db.sqlite3
 lib
 localenv
+media
+component_files
