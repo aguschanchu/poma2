@@ -13,7 +13,7 @@ app.config(function(NotificationProvider) {
 });
 
 app.run(function($rootScope) {
-    $rootScope.endpoint = 'http://192.168.100.2:11000/skynet/';
+    $rootScope.endpoint = 'http://poma2.creame3d.com/skynet/';
 });
 
 app.controller('PollingFilamentChangeController', function($http, $scope, $interval, $rootScope, Notification) {
