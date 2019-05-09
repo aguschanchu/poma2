@@ -80,7 +80,7 @@ class Variation(models.Model):
     """
     name = models.CharField(max_length=200, blank=True, null=True)
     variation_id = models.IntegerField(primary_key=True)
-    sku = models.CharField(max_length=200)
+    sku = models.CharField(max_length=200, blank=True, null=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variations')
     default_attributes = models.ManyToManyField(AttributeTerm)
 

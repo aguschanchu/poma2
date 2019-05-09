@@ -9,3 +9,4 @@ lib
 localenv
 media
 component_files
+*.csv

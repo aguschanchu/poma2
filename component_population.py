@@ -73,7 +73,7 @@ with open('products_data.csv', newline='') as component_data:
                                           File(open(settings.BASE_DIR + '/component_files/stl/' + filename, 'rb')))
                             print(f"STL #{variation.variation_id} was Binary")
 
-                        Component.objects.create(variation=variation, stl=stl, quantity=quantities.index(quantities[-1]))
+                        Component.objects.create(variation=variation, stl=stl, quantity=quantities[min(i, quantities.index(quantities[-1]))])
 
                     # stl=GeometryModel.objects.create(scale=row[6], quality=row[7])
                     # try:
@@ -152,7 +152,7 @@ with open('products_data.csv', newline='') as component_data:
                             print(f"STL #{variation.variation_id} was Binary")
 
                         Component.objects.create(product=product, stl=stl,
-                                                 quantity=quantities.index(quantities[-1]))
+                                                 quantity=quantities[min(i, quantities.index(quantities[-1]))])
 
                     # stl = GeometryModel.objects.create(scale=row[6], quality=row[7])
                     #
