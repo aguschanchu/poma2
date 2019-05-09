@@ -550,7 +550,6 @@ Orders models definitions
 
 
 # Ready to print GCODE Model
-
 class Gcode(models.Model):
     print_file = models.FileField(upload_to='gcode/')
     printer_type = models.ForeignKey('slaicer.PrinterProfile', on_delete=models.SET_NULL, null=True)
