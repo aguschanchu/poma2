@@ -201,7 +201,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
             # Create pieces from variation components
             for component in components:
-                piece = Piece(order=order, print_settings=component.print_settings, copies=component.quantity*item['quantity'], stl=component.stl, gcode=component.gcode, woocommerce_components=component)
+                piece = Piece(order=order, print_settings=component.print_settings, copies=component.quantity*item['quantity'], stl=component.stl, gcode=component.gcode, woocommerce_component=component)
                 piece.save()
 
                 # Add compatible colors and materials to piece
