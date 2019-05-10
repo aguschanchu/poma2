@@ -25,14 +25,14 @@ class Attribute(models.Model):
     @property
     def influences_color(self):
         for term in self.terms.all():
-            if term.color_implications.all():
+            if Color.objects.all().difference(term.color_implications.all()):
                 return True
         return False
 
     @property
     def influences_material(self):
         for term in self.terms.all():
-            if term.material_implications.all():
+            if Material.objects.all().difference(term.material_implications.all()):
                 return True
         return False
 
@@ -46,11 +46,18 @@ class AttributeTerm(models.Model):
     Model for each attribute value possibility as defined in the clients' WooCommerce. Properties color_implications
     and material_implications indicate color and materials, respectively, compatible with the corresponding attribute value, if any.
     """
+
+    def available_colors(self):
+        return Color.objects.all()
+
+    def available_materials(self):
+        return Material.objects.all()
+
     attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE, related_name='terms')
     uuid = models.IntegerField(primary_key=True)
     option = models.CharField(max_length=200)
-    color_implications = models.ManyToManyField(Color, blank=True)
-    material_implications = models.ManyToManyField(Material, blank=True)
+    color_implications = models.ManyToManyField(Color, blank=True, default=available_colors('self'))
+    material_implications = models.ManyToManyField(Material, blank=True, default=available_materials('self'))
 
     def __str__(self):
         return self.option

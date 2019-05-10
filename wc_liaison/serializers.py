@@ -42,7 +42,14 @@ class AttributeTermSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         associated_attribute = Attribute.objects.get(uuid=self.context['attribute_id'])
-        attribute_term = AttributeTerm.objects.update_or_create(uuid=validated_data['uuid'], defaults={'option': validated_data['option'], 'attribute':associated_attribute})
+        attribute_term, created = AttributeTerm.objects.update_or_create(uuid=validated_data['uuid'], defaults={'option': validated_data['option'], 'attribute':associated_attribute})
+        if created:
+            for color in Color.objects.all():
+                attribute_term.color_implications.add(color)
+
+            for material in Material.objects.all():
+                attribute_term.material_implications.add(material)
+
         return attribute_term
 
 
