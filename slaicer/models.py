@@ -47,7 +47,7 @@ class ConfigurationFile(models.Model):
     vendor = models.CharField(max_length=300, null=True)
     # TODO: Proveer metodo para actualizar automaticamente. Usar sintaxis del repo de prusa3d
     provider = models.CharField(max_length=300, null=True, validators=[URLValidator])
-    file = models.FileField(upload_to='slaicer/configuration_files/')
+    file = models.FileField(upload_to='slaicer/configuration_files/', null=True)
 
     def import_available_profiles(self):
         slicer_profiles_helper.import_available_profiles(self)

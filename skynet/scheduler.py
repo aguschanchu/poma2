@@ -9,6 +9,7 @@ import datetime
 import pytz
 from django.utils import timezone
 from slaicer.models import SliceJob, SliceConfiguration
+import skynet.tasks as tareas
 
 '''
 El Scheduler planifica las tareas de poma, y corre periodicamente. En lineas generales, realiza lo siguiente
@@ -102,6 +103,12 @@ def relative_to_absolute_date(s):
 # Scheduler function definition. The result is a Schedule instance
 @shared_task(bind=True, queue='celery')
 def poma_scheduler(self):
+        # Database model creation
+        schedule = skynet_models.Schedule.objects.create(celery_id=self.request.id)
+
+        # We run the dispatcher, to update previous tasks status
+        tareas.octoprint_task_dispatcher()
+
         # Data type definition used for scheduling
         task_data_type = collections.namedtuple('task_data', 'piece_id processing_time deadline copy processing_on')
         tasks_data = []
@@ -218,9 +225,6 @@ def poma_scheduler(self):
         model.AddMaxEquality(obj_var, [task.end for task in all_tasks])
 
         model.Minimize(obj_var)
-
-        # Database model creation
-        schedule = skynet_models.Schedule.objects.create(celery_id=self.request.id)
 
         # Solve model.
         solver = cp_model.CpSolver()
