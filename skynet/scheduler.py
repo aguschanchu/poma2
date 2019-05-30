@@ -33,6 +33,14 @@ def print_piece_on_printer_check(piece, printer):
         printer_size = sorted(printer.printer_type.bed_shape)
         if not all([piece_size[i] < printer_size[i] for i in range(0, 3)]):
             return False
+        # Quality requirements check
+        if piece.stl.quality is not None:
+            if piece.stl.min_quality + 0.05 < printer.printer_type.min_quality() or piece.stl.max_quality - 0.05 > printer.printer_type.max_quality():
+                return False
+        else:
+            if all([x.layer_height * printer.printer_type.base_quality >= piece.stl.geometry.mean_layer_height for x in
+                    printer.printer_type.available_print_profiles.all()]):
+                return False
     # Gcode check
     if piece.gcode is not None:
         if piece.gcode.printer_type != printer.printer_type:
@@ -40,13 +48,6 @@ def print_piece_on_printer_check(piece, printer):
     # Print settings check
     if piece.print_settings is not None:
         if piece.print_settings not in printer.printer_type.available_print_profiles.all():
-            return False
-    # Quality requirements check
-    if piece.stl.quality is not None:
-        if piece.stl.min_quality + 0.05 < printer.printer_type.min_quality() or piece.stl.max_quality - 0.05 > printer.printer_type.max_quality():
-            return False
-    else:
-        if all([x.layer_height*printer.printer_type.base_quality >= piece.stl.geometry.mean_layer_height for x in printer.printer_type.available_print_profiles.all()]):
             return False
     return True
 
