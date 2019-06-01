@@ -101,6 +101,23 @@ def relative_to_absolute_date(s):
     now = datetime.datetime.now(tz=tzinfo)
     return now + datetime.timedelta(seconds=s)
 
+
+class CpModelSolutionCallback(cp_model.CpSolverSolutionCallback):
+    def __init__(self, limit):
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        self.__solution_count = 0
+        self.__solution_limit = limit
+
+    def on_solution_callback(self):
+        self.__solution_count += 1
+        if self.__solution_count >= self.__solution_limit:
+            print('Stop search after %i solutions' % self.__solution_limit)
+            self.StopSearch()
+
+    def solution_count(self):
+        return self.__solution_count
+
+
 # Scheduler function definition. The result is a Schedule instance
 @shared_task(bind=True, queue='celery')
 def poma_scheduler(self):
@@ -229,9 +246,9 @@ def poma_scheduler(self):
 
         # Solve model.
         solver = cp_model.CpSolver()
-        # Solver time limit
-        solver.parameters.max_time_in_seconds = 60.0
-        status = solver.Solve(model)
+        solver.parameters.num_search_workers = 4
+        # Solver solution limit
+        status = solver.SolveWithSolutionCallback(model, CpModelSolutionCallback(10**5))
         print('Model validated: {}'.format(status == cp_model.OPTIMAL))
 
         # We are ready! Finally, we save the results
