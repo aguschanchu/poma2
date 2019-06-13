@@ -64,7 +64,7 @@ app.controller('PollingPrintJobController', function($http, $scope, $interval, $
             url: url,
             data: {'success': result}
         }).then(function successCallback(response) {
-            Notification({message: 'Printer ID: '+ id, title: 'Impresion cancelada'},'success');
+            Notification({message: 'Printer ID: '+ id, title: 'Estado de impresora actualizado'},'success');
         }, function errorCallback(response) {
             Notification({message: 'Hubo un error al intentar cancelar la impresion', title: 'Impresion cancelada'},'error');
         });
@@ -113,7 +113,7 @@ app.controller('PollingPrintersController', function($http, $scope, $interval, $
             method: 'GET',
             url: url
         }).then(function successCallback(response) {
-            Notification({message: 'ID de impresora: '+ id, title: 'Impresion cancelada'},'success');
+            Notification({message: 'ID de impresora: '+ id, title: 'Estado de impresora actualizado'},'success');
         }, function errorCallback(response) {
             Notification({message: 'Hubo un error al intentar cancelar la impresion', title: 'Impresion cancelada'},'error');
         });
@@ -125,11 +125,24 @@ app.controller('PollingPrintersController', function($http, $scope, $interval, $
             method: 'GET',
             url: url
         }).then(function successCallback(response) {
-            Notification({message: 'ID de impresora: '+ id, title: 'Impresion cancelada'},'success');
+            Notification({message: 'ID de impresora: '+ id, title: 'Estado de impresora actualizado'},'success');
         }, function errorCallback(response) {
             Notification({message: 'Hubo un error al intentar cancelar la impresion', title: 'Impresion cancelada'},'error');
         });
     };
+
+    $scope.TogglePrinterEnabledDisabled = function (id, result) {
+        var url = $rootScope.endpoint + 'operations/toggle_printer_en_dis/'+ id +'/';
+        $http({
+            method: 'GET',
+            url: url
+        }).then(function successCallback(response) {
+            Notification({message: 'ID de impresora: '+ id, title: 'Estado de impresora actualizado'},'success');
+        }, function errorCallback(response) {
+            Notification({message: 'Hubo un error al intentar cancelar la impresion', title: 'Impresion cancelada'},'error');
+        });
+    };
+
 });
 
 

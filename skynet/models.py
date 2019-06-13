@@ -543,6 +543,9 @@ class Printer(models.Model):
         else:
             return not self.connection.active_task.finished
 
+    def toggle_enabled_disabled(self):
+        self.disabled = not self.disabled
+        self.save(update_fields=['disabled'])
 
 '''
 Orders models definitions
@@ -557,6 +560,12 @@ class Gcode(models.Model):
     build_time = models.FloatField(default=None, blank=True, null=True)
     weight = models.FloatField(default=None, blank=True, null=True)
     celery_id = models.CharField(max_length=200, null=True, blank=True)
+
+    def __str__(self):
+        if self.print_file is not None:
+            return self.print_file.name
+        else:
+            return self.id
 
     def ready(self):
         if self.build_time is not None:
@@ -596,7 +605,7 @@ class Piece(models.Model):
     auto_print_profile = models.BooleanField(default=True)
     auto_support = models.BooleanField(default=True)
     # Used to indicate wether the piece was created by a woocommerce order o not
-    woocommerce_component = models.ForeignKey('wc_liaison.Component', on_delete=models.SET_NULL, null=True, blank=True)
+    #woocommerce_component = models.ForeignKey('wc_liaison.Component', on_delete=models.SET_NULL, null=True, blank=True)
 
     @property
     def completed_pieces(self):

@@ -93,6 +93,7 @@
           <th></th>
           <th></th>
           <th></th>
+          <th></th>
       </tr>
       </thead>
       <tbody>
@@ -110,7 +111,8 @@
           <td><i class="fas fa-times-circle" ng-click="CancelPrint(x.id)" title="Cancel active print job"></i></td>
           <td ng-if="x.statusclass == 'table-danger'"><i class="fas fa-undo" ng-click="ResetPrinter(x.id)" title="Reset printer"></i></td>
           <td ng-if="x.statusclass != 'table-danger'"></td>
-
+          <td ng-if="x.disabled" == true"><i class="fas fa-toggle-on" ng-click="TogglePrinterEnabledDisabled(x.id)" title="Enable printer"></i></td>
+          <td ng-if="x.disabled" == false"><i class="fas fa-toggle-off" ng-click="TogglePrinterEnabledDisabled(x.id)" title="Disable printer"></i></td>
       </tr>
       </tbody>
     </table>

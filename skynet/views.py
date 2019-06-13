@@ -100,3 +100,17 @@ class ResetConnectionOnPrinter(generics.RetrieveAPIView):
         except Printer.DoesNotExist:
              raise Http404
         return obj
+
+
+class TogglePrinterEnableDisabled(generics.RetrieveAPIView):
+    serializer_class = PrinterSerializer
+    lookup_url_kwarg = 'id'
+
+    def get_object(self):
+        id = self.kwargs.get(self.lookup_url_kwarg)
+        try:
+            obj = Printer.objects.get(id=id)
+            obj.toggle_enabled_disabled()
+        except Printer.DoesNotExist:
+             raise Http404
+        return obj

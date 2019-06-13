@@ -19,4 +19,5 @@ urlpatterns += [
     path('operations/confirm_job_result/<int:id>/', views.ConfirmPrintJobResult.as_view()),
     path('operations/cancel_active_task/<int:id>/', views.CancelActiveTaskOnPrinter.as_view()),
     path('operations/reset_printer/<int:id>/', views.ResetConnectionOnPrinter.as_view()),
+    path('operations/toggle_printer_en_dis/<int:id>/', views.TogglePrinterEnableDisabled.as_view()),
 ]
