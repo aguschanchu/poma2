@@ -141,7 +141,7 @@ class OctoprintTaskAdmin(admin.ModelAdmin):
 
 @admin.register(Gcode)
 class GcodeAdmin(admin.ModelAdmin):
-    list_display = ('id',)
+    list_display = ('id', 'print_file', 'printer_type')
 
 
 @admin.register(Printer)
