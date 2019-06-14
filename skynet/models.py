@@ -624,9 +624,21 @@ class Piece(models.Model):
 
     def quote_ready(self):
         if self.stl is not None:
-            return self.quote.ready()
+            if self.quote.ready():
+                # We try to access the build time
+                if self.quote.build_time is not None:
+                    return True
+                # Something went wrong during object quote generation
+                else:
+                    launch_piece_quoting_tasks(sender=None, instance=self, created=True)
+                    return False
         elif self.gcode is not None:
-            return self.gcode.ready()
+            if self.gcode.ready():
+                if self.gcode.build_time is not None:
+                    return True
+                else:
+                    launch_piece_quoting_tasks(sender=None, instance=self, created=True)
+                    return False
 
     def get_build_time(self):
         if not self.quote_ready():
