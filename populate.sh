@@ -27,6 +27,7 @@ fi
 #DB population
 python manage.py makemigrations slaicer
 python manage.py makemigrations skynet
+python manage.py migrate
 python manage.py makemigrations wc_liaison
 python manage.py migrate
 python populate.py
