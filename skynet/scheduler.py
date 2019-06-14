@@ -119,7 +119,7 @@ class CpModelSolutionCallback(cp_model.CpSolverSolutionCallback):
 
 
 # Scheduler function definition. The result is a Schedule instance
-@shared_task(bind=True, queue='celery')
+@shared_task(bind=True, queue='scheduler')
 def poma_scheduler(self):
         # Database model creation
         schedule = skynet_models.Schedule.objects.create(celery_id=self.request.id)
@@ -300,7 +300,7 @@ def poma_scheduler(self):
 Task dispatcher
 '''
 
-@shared_task(queue='celery', bind=True)
+@shared_task(queue='scheduler', bind=True)
 def poma_dispatcher(self, sid):
     tzinfo = pytz.timezone(settings.TIME_ZONE)
     now = datetime.datetime.now(tz=tzinfo)
