@@ -106,7 +106,7 @@ DATABASES = {
         'NAME': 'poma',
         'USER': 'poma',
         'PASSWORD': 'EgCn7f8HMiufkO',
-        'HOST': '127.0.0.1',
+        'HOST': 'poma2.creame3d.com',
         'PORT': '',
         'OPTIONS': {
            'sslmode': 'disable',

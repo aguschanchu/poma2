@@ -10,6 +10,7 @@ import pytz
 from django.utils import timezone
 from slaicer.models import SliceJob, SliceConfiguration
 import skynet.tasks as tareas
+import os
 
 '''
 El Scheduler planifica las tareas de poma, y corre periodicamente. En lineas generales, realiza lo siguiente
@@ -246,8 +247,9 @@ def poma_scheduler(self):
 
         # Solve model.
         solver = cp_model.CpSolver()
-        solver.parameters.num_search_workers = 4
+        solver.parameters.num_search_workers = os.cpu_count()
         # Solver solution limit
+        solver.parameters.max_time_in_seconds = 3600 * 2
         status = solver.SolveWithSolutionCallback(model, CpModelSolutionCallback(10**5))
         print('Model validated: {}'.format(status == cp_model.OPTIMAL))
 
