@@ -257,7 +257,7 @@ def poma_scheduler(self):
         schedule.status = status
         schedule.finished = timezone.now()
         schedule.save()
-        if not status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+        if not status == cp_model.OPTIMAL or not status == cp_model.FEASIBLE:
             if status == cp_model.MODEL_INVALID:
                 print(model.Validate())
                 print(model.ModelStats())
