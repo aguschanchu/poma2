@@ -789,7 +789,7 @@ class ScheduleEntry(models.Model):
     printer = models.ForeignKey(Printer, on_delete=models.CASCADE)
     # The schedule entry might be an octoprint task or a piece
     piece = models.ForeignKey(Piece, on_delete=models.CASCADE, null=True)
-    task = models.ForeignKey(OctoprintTask, on_delete=models.CASCADE, null=True)
+    task = models.ForeignKey(OctoprintTask, on_delete=models.CASCADE, null=True, blank=True)
     start = models.DateTimeField()
     end = models.DateTimeField()
     deadline = models.DateTimeField()
