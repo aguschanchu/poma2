@@ -106,7 +106,7 @@ DATABASES = {
         'NAME': 'poma',
         'USER': 'poma',
         'PASSWORD': 'EgCn7f8HMiufkO',
-        'HOST': 'poma2.creame3d.com',
+        'HOST': CURRENT_HOST,
         'PORT': '',
         'OPTIONS': {
            'sslmode': 'disable',
@@ -179,7 +179,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 * 100
 
 #Celery config
 CELERY_RESULT_BACKEND = 'django-db'
-CELERY_BROKER_URL = 'amqp://'
+CELERY_BROKER_URL = 'amqp://agus:Outreach3005@{site}:5672/poma'.format(site=CURRENT_HOST)
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SOFT_TIME_LIMIT = 600*3
 CELERY_CHORD_UNLOCK_MAX_RETRIES = 60
