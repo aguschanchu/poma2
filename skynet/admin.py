@@ -207,4 +207,8 @@ class ScheduleAdmin(admin.ModelAdmin):
         return format_html(s)
 
 
+@admin.register(ScheduleEntry)
+class ScheduleEntryAdmin(admin.ModelAdmin):
+    list_display = ('id', 'schedule', 'start')
+    sortable_by = ('start',)
 

@@ -775,10 +775,11 @@ class Schedule(models.Model):
             lines.append("Machine {} schedule:".format(m.id))
             for t in queue:
                 id = "OT{:03d}".format(t.task.id) if t.task is not None else "{:03d}".format(t.piece.id)
-                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline".format(id=id,
+                lines.append("Task {id}: start {start} ends {end} with {deadline} deadline - entryid: {entryid}".format(id=id,
                                                                                                    start=t.start.strftime("%m/%d, %H:%M"),
                                                                                                    end=t.end.strftime("%m/%d, %H:%M"),
-                                                                                                   deadline=t.deadline.strftime("%m/%d, %H:%M")))
+                                                                                                   deadline=t.deadline.strftime("%m/%d, %H:%M"),
+                                                                                                   entryid=t.id))
         return lines
 
 
