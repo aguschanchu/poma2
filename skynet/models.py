@@ -166,13 +166,13 @@ class OctoprintTaskManager(models.Manager):
             raise ValidationError("Please specify a command or a file or a slicejob")
         if file is not None:
             file_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + '.gcode'
-            o = self.create(type='job', connection=connection)
+            o = self.create(type='job', connection=connection, dependency=dependency)
             o.file.save(file_name, file)
         elif commands is not None:
             # So, it's a command task. Before, we check if the object received is a file, or just a string
             if hasattr(commands, 'open'):
                 commands = commands.open('r').read()
-            o = self.create(type='command', commands=commands, connection=connection)
+            o = self.create(type='command', commands=commands, connection=connection, dependency=dependency)
         elif slicejob is not None:
             o = self.create(type='slice-and-print-job', slicejob=slicejob, connection=connection, dependency=dependency)
         return o
